@@ -1,0 +1,319 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { @apply bg-slate-100 text-slate-800 antialiased; }
+
+html.dark {
+  color-scheme: dark;
+}
+html.dark body {
+  @apply bg-[#18191a] text-slate-100;
+  background-color: #18191a !important;
+  color: #e4e6eb !important;
+}
+
+/* ============================================================
+   CHỦ ĐỀ TỐI CHUẨN ZALO (ZALO DARK MODE STYLES)
+   Đảm bảo áp dụng ngay lập tức trên mọi trình duyệt & cổng dev
+   ============================================================ */
+
+/* 1. Thanh điều hướng ngoài cùng bên trái (NavRail) */
+html.dark aside.w-16,
+html.dark aside.bg-sky-800 {
+  background-color: #18191a !important;
+  border-right: 1px solid #2c2d30 !important;
+}
+
+/* 2. Cột danh sách hội thoại Zalo (Sidebar) */
+html.dark aside.w-80 {
+  background-color: #202124 !important;
+  border-right: 1px solid #2c2d30 !important;
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 > div:first-child {
+  border-color: #2c2d30 !important;
+}
+
+html.dark aside.w-80 button[data-open-search] {
+  background-color: #282a2d !important;
+  color: #9aa0a6 !important;
+}
+
+html.dark aside.w-80 button[data-open-search] kbd {
+  background-color: #202124 !important;
+  border-color: #3c4043 !important;
+  color: #9aa0a6 !important;
+}
+
+html.dark aside.w-80 button[title="Tạo cuộc trò chuyện mới"] {
+  background-color: #282a2d !important;
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 select {
+  background-color: #282a2d !important;
+  border-color: #3c4043 !important;
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 ul.divide-y > * {
+  border-color: #282a2d !important;
+}
+
+html.dark aside.w-80 ul li button {
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 ul li button:hover {
+  background-color: #282a2d !important;
+}
+
+html.dark aside.w-80 ul li button.bg-sky-50 {
+  background-color: #1e2638 !important;
+  border-left-color: #0068ff !important;
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 ul li span.text-slate-800,
+html.dark aside.w-80 ul li span.text-slate-900 {
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-80 ul li span.text-slate-500 {
+  color: #9aa0a6 !important;
+}
+
+html.dark aside.w-80 ul li span.text-slate-400 {
+  color: #80868b !important;
+}
+
+html.dark aside.w-80 li.bg-slate-50\/60 {
+  background-color: #18191a !important;
+  color: #80868b !important;
+}
+
+html.dark aside.w-80 > div:last-child {
+  background-color: #18191a !important;
+  border-top: 1px solid #2c2d30 !important;
+  color: #9aa0a6 !important;
+}
+
+html.dark aside.w-80 > div:last-child button {
+  color: #9aa0a6 !important;
+}
+
+/* 3. Khung chat chính (ChannelView & MessageList) */
+html.dark main {
+  background-color: #18191a !important;
+  color: #e4e6eb !important;
+}
+
+html.dark main header {
+  background-color: #202124 !important;
+  border-bottom: 1px solid #2c2d30 !important;
+  color: #e4e6eb !important;
+}
+
+html.dark main header h2 {
+  color: #ffffff !important;
+}
+
+html.dark main header p {
+  color: #9aa0a6 !important;
+}
+
+html.dark main header button {
+  color: #9aa0a6 !important;
+}
+
+html.dark main header button:hover {
+  background-color: #282a2d !important;
+  color: #ffffff !important;
+}
+
+html.dark [data-message-list] {
+  background-color: #18191a !important;
+}
+
+/* Tin nhắn Zalo */
+html.dark .bubble-mine {
+  background-color: #0068ff !important;
+  color: #ffffff !important;
+}
+
+html.dark .bubble-other,
+html.dark .chat-bubble.bg-white {
+  background-color: #242526 !important;
+  color: #e4e6eb !important;
+  border: 1px solid #323438 !important;
+  box-shadow: none !important;
+}
+
+html.dark .chat-bubble {
+  color: #e4e6eb !important;
+}
+
+html.dark div[data-mid] span.text-slate-700 {
+  color: #e4e6eb !important;
+}
+
+html.dark div[data-mid] span.text-slate-400 {
+  color: #80868b !important;
+}
+
+/* Thanh phân cách ngày */
+html.dark [data-message-list] div.h-px {
+  background-color: #282a2d !important;
+}
+
+html.dark [data-message-list] span[class*="bg-slate-100"] {
+  background-color: #242526 !important;
+  color: #9aa0a6 !important;
+  border: 1px solid #282a2d !important;
+}
+
+/* 4. Khung soạn thảo tin nhắn (Composer) */
+html.dark main [data-composer],
+html.dark main div:has(> textarea) {
+  background-color: #242526 !important;
+  border-color: #3a3b3c !important;
+  color: #e4e6eb !important;
+}
+
+html.dark textarea {
+  color: #e4e6eb !important;
+}
+
+html.dark textarea::placeholder {
+  color: #8a8d91 !important;
+}
+
+html.dark main div:has(> textarea) button {
+  color: #9aa0a6 !important;
+}
+
+html.dark main div:has(> textarea) button:hover {
+  color: #ffffff !important;
+  background-color: #323438 !important;
+}
+
+/* 5. Cột thông tin phụ bên phải (RightPanel) */
+html.dark aside[data-right-panel],
+html.dark aside.md\:w-80 {
+  background-color: #202124 !important;
+  border-left: 1px solid #2c2d30 !important;
+  color: #e4e6eb !important;
+}
+
+html.dark [data-right-panel] > div:first-child {
+  border-bottom: 1px solid #2c2d30 !important;
+}
+
+html.dark [data-right-panel] button {
+  color: #9aa0a6 !important;
+}
+
+html.dark [data-right-panel] button.bg-white {
+  background-color: #282a2d !important;
+  color: #0068ff !important;
+  box-shadow: none !important;
+}
+
+html.dark [data-right-panel] button[class*="rounded-full"] {
+  background-color: #282a2d !important;
+  color: #9aa0a6 !important;
+}
+
+html.dark [data-right-panel] button[class*="rounded-full"][class*="bg-sky-600"] {
+  background-color: #0068ff !important;
+  color: #ffffff !important;
+}
+
+html.dark [data-right-panel] div.text-slate-400 {
+  color: #80868b !important;
+}
+
+html.dark [data-right-panel] span.text-slate-700 {
+  color: #e4e6eb !important;
+}
+
+html.dark [data-right-panel] p.text-slate-600 {
+  color: #9aa0a6 !important;
+}
+
+/* 6. Menu Cài đặt Zalo (Settings Popover) */
+html.dark aside.w-16 div.absolute.bottom-3 {
+  background-color: #242526 !important;
+  border: 1px solid #3a3b3c !important;
+  color: #e4e6eb !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+html.dark aside.w-16 div.absolute.bottom-3 .bg-slate-100 {
+  background-color: #18191a !important;
+}
+
+html.dark aside.w-16 div.absolute.bottom-3 button {
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-16 div.absolute.bottom-3 button:hover {
+  background-color: #2e3033 !important;
+}
+
+html.dark aside.w-16 div.absolute.bottom-3 div.border-slate-100 {
+  border-color: #3a3b3c !important;
+}
+
+/* 7. Hộp thoại nổi (Modals) & Danh bạ */
+html.dark .fixed > div.bg-white {
+  background-color: #242526 !important;
+  border: 1px solid #3a3b3c !important;
+  color: #e4e6eb !important;
+}
+
+html.dark .fixed > div.bg-white input {
+  background-color: #18191a !important;
+  border-color: #3a3b3c !important;
+  color: #e4e6eb !important;
+}
+
+html.dark aside.w-72 {
+  background-color: #202124 !important;
+  border-right: 1px solid #2c2d30 !important;
+  color: #e4e6eb !important;
+}
+
+.scroll-thin::-webkit-scrollbar { width: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }
+html.dark .scroll-thin::-webkit-scrollbar-thumb { @apply bg-slate-700 rounded-full; }
+
+.sidebar-scroll::-webkit-scrollbar { width: 6px; }
+.sidebar-scroll::-webkit-scrollbar-thumb { @apply bg-slate-400 rounded-full; }
+html.dark .sidebar-scroll::-webkit-scrollbar-thumb { @apply bg-slate-700 rounded-full; }
+
+@keyframes blink { 0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } }
+.typing-dot { animation: blink 1.4s infinite both; }
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(-8px) scale(.98) } to { opacity: 1; transform: none } }
+@keyframes flash { 0%, 100% { background-color: transparent } 20%, 60% { background-color: rgb(254 243 199) } }
+@keyframes flashDark { 0%, 100% { background-color: transparent } 20%, 60% { background-color: rgb(245 158 11 / 0.15) } }
+
+.flash-msg { animation: flash 2.2s ease-in-out; border-radius: 14px; }
+html.dark .flash-msg { animation: flashDark 2.2s ease-in-out; }
+
+.chat-bubble { overflow-wrap: anywhere; word-break: break-word; }
+.mention { @apply rounded px-0.5 font-semibold text-sky-700 bg-sky-50; }
+.mention-me { @apply rounded px-0.5 font-semibold text-amber-800 bg-amber-100; }
+.bubble-mine .mention, .bubble-mine .mention-me { @apply bg-white/20 text-white; }
+
+html.dark .mention { @apply rounded px-0.5 font-semibold text-sky-300 bg-sky-500/20; }
+html.dark .mention-me { @apply rounded px-0.5 font-semibold text-amber-300 bg-amber-500/20; }
+
+mark.hl { @apply rounded bg-amber-200 px-0.5 text-slate-900; }
+html.dark mark.hl { @apply rounded bg-amber-600/70 px-0.5 text-white; }

@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: khoachat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: khoachat
+      POSTGRES_PASSWORD: khoachat
+      POSTGRES_DB: khoachat
+    ports:
+      - "5432:5432"
+    volumes:
+      - khoachat_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khoachat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  khoachat_pgdata:

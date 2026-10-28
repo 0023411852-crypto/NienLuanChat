@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  LECTURER
+  ADMIN
+}
+
+enum ChannelType {
+  CLASS
+  ANNOUNCEMENT
+  DIRECT
+  COMMUNITY
+}
+
+enum MemberRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum NotifyLevel {
+  DEFAULT
+  ALL
+  MENTIONS
+  NONE
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  name        String
+  role        Role     @default(STUDENT)
+  avatar      String?
+  studentCode String?
+  locked      Boolean  @default(false)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships       ChannelMember[]
+  messages          Message[]           @relation("UserMessages")
+  pinnedMessages    Message[]           @relation("PinnedBy")
+  attachments       Attachment[]
+  mentions          Mention[]
+  pushSubscriptions PushSubscription[]
+}
+
+model Channel {
+  id          String      @id @default(uuid())
+  type        ChannelType
+  name        String
+  description String?
+  courseCode  String?
+  avatar      String?
+  archived    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  members     ChannelMember[]
+  messages    Message[]
+  attachments Attachment[]
+}
+
+model ChannelMember {
+  id                String      @id @default(uuid())
+  channelId         String
+  userId            String
+  role              MemberRole  @default(MEMBER)
+  notifyLevel       NotifyLevel @default(DEFAULT)
+  lastReadSeq       Int         @default(0)
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  joinedAt          DateTime    @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+}
+
+model Message {
+  id          String      @id @default(uuid())
+  seq         Int         @default(autoincrement())
+  clientId    String      @unique
+  channelId   String
+  senderId    String
+  type        MessageType @default(TEXT)
+  content     String      @default("")
+  replyToId   String?
+  pinned      Boolean     @default(false)
+  pinnedAt    DateTime?
+  pinnedById  String?
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+
+  sender      User         @relation("UserMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  pinnedBy    User?        @relation("PinnedBy", fields: [pinnedById], references: [id], onDelete: SetNull)
+  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  replyTo     Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies     Message[]    @relation("MessageReplies")
+  attachments Attachment[]
+  mentions    Mention[]
+
+  @@index([channelId, seq])
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  filename   String
+  mime       String
+  size       Int
+  isImage    Boolean  @default(false)
+  path       String
+  url        String
+  channelId  String
+  uploaderId String
+  messageId  String?
+  createdAt  DateTime @default(now())
+
+  channel  Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  message  Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+}
+
+model Mention {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

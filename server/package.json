@@ -1,0 +1,37 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx tsx watch src/index.ts\"",
+    "build": "tsc",
+    "start": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && node dist/index.js\"",
+    "db:migrate": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push\"",
+    "db:push": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push\"",
+    "db:generate": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma generate\"",
+    "db:seed": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx tsx src/seed.ts\"",
+    "db:reset": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push --force-reset && npx tsx src/seed.ts\""
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.17.10",
+    "prisma": "^6.19.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

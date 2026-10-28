@@ -1,0 +1,105 @@
+# ==========================================
+# 1. DEPENDENCIES (Thư viện cài đặt)
+# ==========================================
+node_modules/
+client/node_modules/
+server/node_modules/
+.pnpm-store/
+
+# ==========================================
+# 2. BUILD & OUTPUTS (Thư mục build / biên dịch)
+# ==========================================
+dist/
+client/dist/
+server/dist/
+build/
+out/
+.vite/
+*.tsbuildinfo
+client/tsconfig.tsbuildinfo
+server/tsconfig.tsbuildinfo
+
+# ==========================================
+# 3. ENVIRONMENT & SECRETS (Bảo mật & Biến môi trường)
+# ==========================================
+.env
+.env.local
+.env.*.local
+client/.env
+client/.env.local
+server/.env
+server/.env.local
+server/.vapid.json
+*.pem
+*.key
+*.cert
+
+# ==========================================
+# 4. UPLOADS (Tệp tin do người dùng tải lên)
+# ==========================================
+uploads/*
+server/uploads/*
+!server/uploads/.gitkeep
+!uploads/.gitkeep
+
+# ==========================================
+# 5. RUNTIME DATA (Dữ liệu runtime cục bộ & DB)
+# ==========================================
+server/channel_moderation.json
+server/delivered.json
+server/unfriended.json
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+
+# ==========================================
+# 6. GENERATED CODE (Mã tự sinh từ Prisma)
+# ==========================================
+server/src/generated/
+prisma/generated/
+
+# ==========================================
+# 7. LOGS (Nhật ký lỗi và thực thi)
+# ==========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# 8. OS & SYSTEM FILES (Tệp rác hệ điều hành)
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ==========================================
+# 9. IDE & EDITORS (Cấu hình IDE cá nhân)
+# ==========================================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ==========================================
+# 10. TEMPORARY & CACHE (Tệp tạm)
+# ==========================================
+.cache/
+.temp/
+tmp/
+temp/
+*.tmp
