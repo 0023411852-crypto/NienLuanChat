@@ -243,7 +243,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !comparePassword(password, user.password)) {
-    return res.status(400).json({ error: 'Email hoặc mật khẩu không chính xác' });
+    return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác' });
   }
   if (user.locked) {
     return res.status(403).json({ error: 'Tài khoản đã bị khoá', code: 'LOCKED' });
@@ -530,6 +530,79 @@ app.get('/api/channels/:id/pins', requireAuth, async (req, res) => {
   });
 
   res.json({ messages: formattedPins });
+});
+
+// Ghim / Bỏ ghim tin nhắn
+app.post('/api/messages/:id/pin', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const { pinned } = req.body;
+  const msg = await prisma.message.findUnique({ where: { id } });
+  if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
+  const isPinned = pinned !== undefined ? !!pinned : !msg.pinned;
+  const updated = await prisma.message.update({
+    where: { id },
+    data: {
+      pinned: isPinned,
+      pinnedAt: isPinned ? new Date() : null,
+      pinnedById: isPinned ? req.user!.id : null,
+    },
+    include: {
+      sender: true,
+      attachments: true,
+      replyTo: { include: { sender: true, attachments: true } },
+      mentions: { include: { user: true } },
+    },
+  });
+  const formatted = formatMessage(updated);
+  io.to(`channel:${msg.channelId}`).emit('message:updated', formatted);
+  res.json({ ok: true, message: formatted });
+});
+
+// Chỉnh sửa tin nhắn
+app.patch('/api/messages/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  const msg = await prisma.message.findUnique({ where: { id } });
+  if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
+  if (msg.senderId !== req.user!.id) {
+    return res.status(403).json({ error: 'Bạn chỉ có thể sửa tin của mình' });
+  }
+  const updated = await prisma.message.update({
+    where: { id },
+    data: { content: content || '', editedAt: new Date() },
+    include: {
+      sender: true,
+      attachments: true,
+      replyTo: { include: { sender: true, attachments: true } },
+      mentions: { include: { user: true } },
+    },
+  });
+  const formatted = formatMessage(updated);
+  io.to(`channel:${msg.channelId}`).emit('message:updated', formatted);
+  res.json({ ok: true, message: formatted });
+});
+
+// Xoá / Thu hồi tin nhắn
+app.delete('/api/messages/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const msg = await prisma.message.findUnique({ where: { id } });
+  if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
+  if (msg.senderId !== req.user!.id && req.user!.role === 'STUDENT') {
+    return res.status(403).json({ error: 'Bạn không có quyền xoá tin này' });
+  }
+  const updated = await prisma.message.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+    include: {
+      sender: true,
+      attachments: true,
+      replyTo: { include: { sender: true, attachments: true } },
+      mentions: { include: { user: true } },
+    },
+  });
+  const formatted = formatMessage(updated);
+  io.to(`channel:${msg.channelId}`).emit('message:updated', formatted);
+  res.json({ ok: true, message: formatted });
 });
 
 // Danh sách file của kênh (FilesTab)
@@ -974,9 +1047,8 @@ app.post('/api/friends/request', requireAuth, async (req: AuthenticatedRequest, 
 });
 
 app.post('/api/friends/accept', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const { targetUserId } = req.body;
+  const fromId = req.body.fromUserId || req.body.targetUserId;
   const myId = req.user!.id;
-  const fromId = targetUserId;
   if (!fromId) return res.status(400).json({ error: 'Yêu cầu không hợp lệ' });
 
   setUnfriended(myId, fromId, false);
@@ -1103,6 +1175,63 @@ app.get('/api/sync', requireAuth, async (req: AuthenticatedRequest, res) => {
     channels: channels.filter(Boolean),
     online: Array.from(onlineUsers),
     hasMore: false,
+  });
+});
+
+// Tìm kiếm tổng hợp (Tin nhắn, theo từ khoá, kênh, người gửi, có tệp đính kèm)
+app.get('/api/search', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const q = ((req.query.q as string) || '').trim();
+  const channelId = req.query.channelId as string | undefined;
+  const senderId = req.query.senderId as string | undefined;
+  const hasFile = req.query.hasFile === 'true';
+
+  if (!q && !channelId && !senderId && !hasFile) {
+    return res.json({ ok: true, messages: [], total: 0 });
+  }
+
+  const userId = req.user!.id;
+  const myMemberships = await prisma.channelMember.findMany({
+    where: { userId },
+    select: { channelId: true },
+  });
+  const chIds = myMemberships.map((m) => m.channelId);
+
+  const where: any = {
+    deletedAt: null,
+  };
+  if (q) {
+    where.content = { contains: q, mode: 'insensitive' };
+  }
+  if (channelId) {
+    where.channelId = channelId;
+  } else if (req.user!.role !== 'ADMIN') {
+    where.channelId = { in: chIds };
+  }
+  if (senderId) {
+    where.senderId = senderId;
+  }
+  if (hasFile) {
+    where.attachments = { some: {} };
+  }
+
+  const messages = await prisma.message.findMany({
+    where,
+    take: 50,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      sender: true,
+      attachments: true,
+      replyTo: { include: { sender: true, attachments: true } },
+      mentions: { include: { user: true } },
+    },
+  });
+
+  const formatted = messages.map(formatMessage);
+  res.json({
+    ok: true,
+    messages: formatted,
+    results: formatted.map((m) => ({ message: m, highlights: q ? [q] : [] })),
+    total: formatted.length,
   });
 });
 
@@ -2083,6 +2212,24 @@ io.on('connection', async (socket: Socket) => {
   socket.on('message:send', async (data, ack) => {
     try {
       const { channelId, clientId, content, replyToId, attachmentIds, mentionIds } = data;
+      if (!channelId) return ack?.({ ok: false, error: 'Thiếu channelId' });
+
+      // Chống gửi trùng lặp theo clientId (Idempotency)
+      if (clientId) {
+        const existing = await prisma.message.findUnique({
+          where: { clientId },
+          include: {
+            sender: true,
+            attachments: true,
+            replyTo: { include: { sender: true, attachments: true } },
+            mentions: { include: { user: true } },
+          },
+        });
+        if (existing) {
+          return ack?.({ ok: true, duplicate: true, message: formatMessage(existing) });
+        }
+      }
+
       const ch = await prisma.channel.findUnique({ where: { id: channelId } });
       if (!ch) return ack?.({ ok: false, error: 'Kênh không tồn tại' });
 
@@ -2320,15 +2467,30 @@ io.on('connection', async (socket: Socket) => {
   });
 
   // 6. Đánh dấu đã đọc kênh
-  socket.on('channel:read', async ({ channelId, messageId }, ack) => {
+  socket.on('channel:read', async (data: any, ack) => {
     try {
-      const msg = await prisma.message.findUnique({ where: { id: messageId } });
-      const lastSeq = msg?.seq || 0;
+      const channelId = data?.channelId;
+      const messageId = data?.messageId;
+      if (!channelId) return ack?.({ ok: false, error: 'Thiếu channelId' });
+
+      let lastSeq = data?.maxSeq || data?.seq || 0;
+      if (messageId) {
+        const msg = await prisma.message.findUnique({ where: { id: messageId } });
+        if (msg && msg.seq) lastSeq = Math.max(lastSeq, msg.seq);
+      }
+
+      // Đảm bảo tính đơn điệu không bị lùi seq
+      const currentMember = await prisma.channelMember.findUnique({
+        where: { channelId_userId: { channelId, userId: user.id } },
+      });
+      if (currentMember && currentMember.lastReadSeq > lastSeq) {
+        lastSeq = currentMember.lastReadSeq;
+      }
 
       await prisma.channelMember.updateMany({
         where: { channelId, userId: user.id },
         data: {
-          lastReadMessageId: messageId,
+          lastReadMessageId: messageId || null,
           lastReadSeq: lastSeq,
           lastReadAt: new Date(),
         },
@@ -2336,7 +2498,7 @@ io.on('connection', async (socket: Socket) => {
 
       setDeliveredSeq(channelId, user.id, lastSeq);
 
-      const st = { channelId, messageId, seq: lastSeq, userId: user.id, at: new Date().toISOString() };
+      const st = { channelId, messageId: messageId || null, seq: lastSeq, userId: user.id, at: new Date().toISOString() };
       io.to(`channel:${channelId}`).emit('channel:read', st);
       io.to(`user:${user.id}`).emit('channel:read', st);
       ack?.({ ok: true, ...st });

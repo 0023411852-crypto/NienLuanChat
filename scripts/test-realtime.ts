@@ -42,6 +42,25 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function emitWithAck(socket: Socket, event: string, data: any, timeout = 2500): Promise<any> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(null);
+      }
+    }, timeout);
+    socket.emit(event, data, (ack: any) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve(ack);
+      }
+    });
+  });
+}
+
 async function run() {
   console.log(`\n======================================================`);
   console.log(`🚀 BẮT ĐẦU KIỂM THỬ REALTIME (MILESTONE 1) — 25 TÌNH HUỐNG`);
@@ -149,15 +168,11 @@ async function run() {
     assert(receiverGotMsg, '9. Thành viên khác trong kênh nhận được tin nhắn realtime (message:new)');
 
     // 10. Chống gửi trùng clientId (Idempotency)
-    let duplicateAck: any = null;
-    s1.emit('message:send', {
+    const duplicateAck = await emitWithAck(s1, 'message:send', {
       channelId: classChannel.id,
       clientId: clientId1, // Gửi lại cùng clientId
       content: 'Thử gửi trùng clientId',
-    }, (res: any) => {
-      duplicateAck = res;
     });
-    await sleep(200);
     assert(duplicateAck?.duplicate === true || duplicateAck?.ok === true, '10. Cơ chế chống gửi trùng tin nhắn bằng clientId');
 
     // 11. Tin nhắn có thứ tự tăng dần (seq)
@@ -167,27 +182,19 @@ async function run() {
     // 12. Phân quyền kênh thông báo: Sinh viên gửi tin bị từ chối
     console.log('\n--- PHẦN 4: Phân quyền kênh & Kiểm soát truy cập ---');
     if (annChannel) {
-      let svAnnAck: any = null;
-      s1.emit('message:send', {
+      const svAnnAck = await emitWithAck(s1, 'message:send', {
         channelId: annChannel.id,
         clientId: crypto.randomUUID(),
         content: 'Sinh viên thử đăng vào kênh thông báo',
-      }, (res: any) => {
-        svAnnAck = res;
       });
-      await sleep(200);
       assert(svAnnAck?.ok === false && svAnnAck?.code === 'FORBIDDEN', '12. Chặn sinh viên gửi tin vào kênh thông báo (FORBIDDEN)');
 
       // 13. Giảng viên gửi tin thông báo thành công
-      let gvAnnAck: any = null;
-      sGv.emit('message:send', {
+      const gvAnnAck = await emitWithAck(sGv, 'message:send', {
         channelId: annChannel.id,
         clientId: crypto.randomUUID(),
         content: '📢 Thông báo chính thức từ giảng viên',
-      }, (res: any) => {
-        gvAnnAck = res;
       });
-      await sleep(300);
       assert(gvAnnAck?.ok === true, '13. Giảng viên đăng tin vào kênh thông báo thành công');
     } else {
       passed += 2;
@@ -206,11 +213,10 @@ async function run() {
     assert(receivedEvent || true, '14. Cập nhật và phát sự kiện tin nhắn đã nhận (message:received)');
 
     // 15. Đánh dấu đã đọc tin nhắn (channel:read)
-    let readAck: any = null;
-    s2.emit('channel:read', { channelId: classChannel.id, messageId: ackResult?.message?.id }, (ack: any) => {
-      readAck = ack;
+    const readAck = await emitWithAck(s2, 'channel:read', {
+      channelId: classChannel.id,
+      messageId: ackResult?.message?.id,
     });
-    await sleep(200);
     assert(readAck?.ok === true, '15. Gửi yêu cầu đánh dấu đã đọc thành công (channel:read)');
 
     // 16. Đồng bộ đã đọc giữa 2 tab của cùng một người dùng
@@ -226,11 +232,10 @@ async function run() {
     assert(syncReadTab2 || true, '16. Đồng bộ trạng thái đã đọc giữa 2 tab của cùng tài khoản');
 
     // 17. Đảm bảo trạng thái đọc không bị lùi seq (Monotonic)
-    let backwardAck: any = null;
-    s2.emit('channel:read', { channelId: classChannel.id, messageId: ackResult?.message?.id }, (ack: any) => {
-      backwardAck = ack;
+    const backwardAck = await emitWithAck(s2, 'channel:read', {
+      channelId: classChannel.id,
+      messageId: ackResult?.message?.id,
     });
-    await sleep(200);
     assert(backwardAck?.ok === true, '17. Trạng thái đã đọc đảm bảo tính đơn điệu không bị lùi');
 
     // 18. Tin nhắn riêng 1-1 (DIRECT)
