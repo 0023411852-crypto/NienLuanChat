@@ -11,7 +11,10 @@
     "db:push": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push\"",
     "db:generate": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma generate\"",
     "db:seed": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx tsx src/seed.ts\"",
-    "db:reset": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push --force-reset && npx tsx src/seed.ts\""
+    "db:reset": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat/server && npx prisma db push --force-reset && npx tsx src/seed.ts\"",
+    "test:realtime": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat && npx tsx scripts/test-realtime.ts\"",
+    "test:features": "wsl -e bash -c \"cd /mnt/d/khoachat/khoachat && npx tsx scripts/test-features.ts\"",
+    "test": "npm run test:realtime && npm run test:features"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
