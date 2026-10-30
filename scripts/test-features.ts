@@ -521,8 +521,8 @@ async function run() {
     });
     assert(uploadEmpty.status === 400, '85. Báo lỗi 400 khi upload không có tệp đính kèm');
 
-    // Tra cứu tệp không tồn tại
-    const fileNotFound = await request('/api/files/khong-ton-tai-id');
+    // Tra cứu tệp không tồn tại (cần token vì route đã yêu cầu xác thực)
+    const fileNotFound = await request('/api/files/khong-ton-tai-id', { headers: { Authorization: `Bearer ${sv1.token}` } });
     assert(fileNotFound.status === 404, '86. Báo lỗi 404 khi truy cập tệp tin không tồn tại');
 
     // Đồng bộ với afterSeq lớn hơn tổng tin

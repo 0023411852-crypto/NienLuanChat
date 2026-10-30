@@ -232,6 +232,33 @@ async function getFormattedChannel(channelId: string, userId: string, role: stri
   };
 }
 
+// Giới hạn số lần thử đăng nhập sai liên tục để chống Brute-Force
+const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+function checkLoginRateLimit(key: string): boolean {
+  const record = failedLoginAttempts.get(key);
+  if (!record) return true;
+  if (record.lockedUntil > Date.now()) return false;
+  if (record.lockedUntil <= Date.now() && record.count >= 10) {
+    failedLoginAttempts.delete(key);
+  }
+  return true;
+}
+
+function recordFailedLogin(key: string) {
+  const now = Date.now();
+  const record = failedLoginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= 10) {
+    record.lockedUntil = now + 60 * 1000; // Khóa 1 phút nếu nhập sai quá 10 lần liên tục
+  }
+  failedLoginAttempts.set(key, record);
+}
+
+function clearFailedLogin(key: string) {
+  failedLoginAttempts.delete(key);
+}
+
 // ==========================================
 // 1. AUTH ROUTES
 // ==========================================
@@ -241,13 +268,23 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Vui lòng nhập email và mật khẩu' });
   }
 
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+  const rateLimitKey = `${clientIp}:${email}`;
+
+  if (!checkLoginRateLimit(rateLimitKey)) {
+    return res.status(429).json({ error: 'Quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau 1 phút.' });
+  }
+
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !comparePassword(password, user.password)) {
+    recordFailedLogin(rateLimitKey);
     return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác' });
   }
   if (user.locked) {
     return res.status(403).json({ error: 'Tài khoản đã bị khoá', code: 'LOCKED' });
   }
+
+  clearFailedLogin(rateLimitKey);
 
   const token = signToken(user);
   res.json({
@@ -400,6 +437,17 @@ app.delete('/api/channels/:id/membership', requireAuth, async (req: Authenticate
   const channelId = req.params.id;
   const userId = req.user!.id;
 
+  const ch = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (!ch) return res.status(404).json({ error: 'Kênh không tồn tại' });
+
+  // Ràng buộc nghiệp vụ: Không cho phép tự rời kênh thông báo khoa hoặc kênh lớp học phần bắt buộc
+  if (ch.type === 'ANNOUNCEMENT') {
+    return res.status(400).json({ error: 'Không thể rời khỏi kênh thông báo chung của khoa' });
+  }
+  if (ch.type === 'CLASS' && req.user!.role === 'STUDENT') {
+    return res.status(400).json({ error: 'Sinh viên không thể tự ý rời khỏi kênh lớp học phần bắt buộc' });
+  }
+
   await prisma.channelMember.deleteMany({
     where: { channelId, userId },
   });
@@ -452,6 +500,19 @@ app.get('/api/channels/:id/messages', requireAuth, async (req: AuthenticatedRequ
   const limit = Math.min(parseInt(req.query.limit as string) || 30, 100);
   const before = req.query.before ? parseInt(req.query.before as string) : undefined;
   const after = req.query.after ? parseInt(req.query.after as string) : undefined;
+
+  const ch = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (!ch) return res.status(404).json({ error: 'Kênh không tồn tại' });
+
+  // Kiểm tra quyền xem tin nhắn trong kênh riêng tư (ngoại trừ ADMIN hoặc kênh thông báo khoa công khai)
+  if (req.user!.role !== 'ADMIN' && ch.type !== 'ANNOUNCEMENT') {
+    const isMember = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId, userId: req.user!.id } },
+    });
+    if (!isMember) {
+      return res.status(403).json({ error: 'Bạn không có quyền xem tin nhắn trong kênh này' });
+    }
+  }
 
   let where: any = { channelId };
   if (before) where.seq = { lt: before };
@@ -754,10 +815,27 @@ app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async 
   });
 });
 
-// Tải file xuống
-app.get('/api/files/:id', async (req, res) => {
-  const att = await prisma.attachment.findUnique({ where: { id: req.params.id } });
+// Tải file xuống — yêu cầu xác thực và kiểm tra quyền thành viên kênh
+app.get('/api/files/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const att = await prisma.attachment.findUnique({
+    where: { id: req.params.id },
+    include: { channel: { select: { type: true } } },
+  });
   if (!att) return res.status(404).send('Không tìm thấy tệp');
+
+  // Kiểm tra quyền: ADMIN hoặc thành viên kênh mới được tải file
+  if (req.user!.role !== 'ADMIN') {
+    // Kênh ANNOUNCEMENT cho phép mọi thành viên đã xác thực xem thông báo
+    if (att.channel?.type !== 'ANNOUNCEMENT') {
+      const isMember = await prisma.channelMember.findUnique({
+        where: { channelId_userId: { channelId: att.channelId!, userId: req.user!.id } },
+      });
+      if (!isMember) {
+        return res.status(403).send('Bạn không có quyền truy cập tệp này');
+      }
+    }
+  }
+
   const filePath = path.join(UPLOAD_DIR, att.path);
   if (!fs.existsSync(filePath)) return res.status(404).send('Tệp đã bị xoá');
   res.setHeader('Content-Type', att.mime);
@@ -1723,6 +1801,14 @@ app.delete('/api/admin/channels/:id', requireAuth, async (req: AuthenticatedRequ
     return res.status(403).json({ error: 'Chỉ chủ nhóm hoặc quản trị viên mới có quyền giải tán nhóm' });
   }
 
+  // Kênh thông báo khoa & kênh lớp học phần chỉ ADMIN mới được xoá
+  if ((channel.type === 'ANNOUNCEMENT' || channel.type === 'CLASS') && req.user!.role !== 'ADMIN') {
+    return res.status(403).json({
+      error: `Kênh ${channel.type === 'ANNOUNCEMENT' ? 'thông báo khoa' : 'lớp học phần'} chỉ có quản trị viên hệ thống mới được phép giải tán`,
+    });
+  }
+
+
   // Xoá cấu hình cấm chat của kênh nếu có
   channelChatLocked.delete(channel.id);
   for (const k of Array.from(mutedMembers)) {
@@ -2252,38 +2338,43 @@ io.on('connection', async (socket: Socket) => {
         }
       }
 
-      const msg = await prisma.message.create({
-        data: {
-          clientId,
-          channelId,
-          senderId: user.id,
-          content: content || '',
-          replyToId: replyToId || null,
-        },
-        include: {
-          sender: true,
-          attachments: true,
-          replyTo: { include: { sender: true, attachments: true } },
-          mentions: { include: { user: true } },
-        },
-      });
-
-      // Liên kết attachments nếu có
-      if (attachmentIds?.length) {
-        await prisma.attachment.updateMany({
-          where: { id: { in: attachmentIds } },
-          data: { messageId: msg.id },
+      // Tạo tin nhắn + liên kết file + @mention trong một transaction để đảm bảo toàn vẹn dữ liệu
+      const msg = await prisma.$transaction(async (tx) => {
+        const created = await tx.message.create({
+          data: {
+            clientId,
+            channelId,
+            senderId: user.id,
+            content: content || '',
+            replyToId: replyToId || null,
+          },
+          include: {
+            sender: true,
+            attachments: true,
+            replyTo: { include: { sender: true, attachments: true } },
+            mentions: { include: { user: true } },
+          },
         });
-      }
 
-      // Tạo mentions nếu có
-      if (mentionIds?.length) {
-        for (const uid of mentionIds) {
-          await prisma.mention.create({
-            data: { messageId: msg.id, userId: uid },
-          }).catch(() => {});
+        // Liên kết attachments nếu có
+        if (attachmentIds?.length) {
+          await tx.attachment.updateMany({
+            where: { id: { in: attachmentIds } },
+            data: { messageId: created.id },
+          });
         }
-      }
+
+        // Tạo mentions nếu có
+        if (mentionIds?.length) {
+          for (const uid of mentionIds) {
+            await tx.mention.create({
+              data: { messageId: created.id, userId: uid },
+            }).catch(() => {});
+          }
+        }
+
+        return created;
+      });
 
       // Tự động đánh dấu người gửi đã đọc tin nhắn của chính mình
       await prisma.channelMember.updateMany({
@@ -2624,6 +2715,12 @@ io.on('connection', async (socket: Socket) => {
     onlineUsers.delete(user.id);
     io.emit('presence', { userId: user.id, online: false });
     io.emit('call:peer_disconnected', { userId: user.id });
+
+    // Cập nhật thời điểm trực tuyến lần cuối (last seen)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastSeenAt: new Date() },
+    }).catch(() => {});
 
     // Tự động kết thúc và lưu log nếu đang trong cuộc gọi dở dang
     for (const [key, call] of ongoingCalls.entries()) {
