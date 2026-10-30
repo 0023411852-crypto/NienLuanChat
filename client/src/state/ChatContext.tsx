@@ -5,7 +5,7 @@ import { cache, outbox } from '../lib/outbox';
 import { uuid } from '../lib/uuid';
 import { channelTitle } from '../lib/format';
 import { playSound, shouldNotify, showBrowserNotification } from '../lib/notify';
-import type { Attachment, Channel, FriendRequestItem, FriendUser, Message, NotifyLevel, OutboxFile, OutboxItem, ReadState, User } from '../types';
+import { parseCallLog, parseContactCard, type Attachment, type Channel, type FriendRequestItem, type FriendUser, type Message, type NotifyLevel, type OutboxFile, type OutboxItem, type ReadState, type User } from '../types';
 import { initialState, mentionsMe, reducer, type ChatState } from './reducer';
 import { useToast } from './toast';
 
@@ -221,10 +221,19 @@ export function ChatProvider({ me, onUnauthorized, children }: { me: User; onUna
     localStorage.setItem('khoachat.lastChannel', channelId);
   }, [toast]);
 
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+
   /** Thông báo khi có tin mới: toast trong app, hoặc thông báo hệ điều hành khi tab đang ẩn. */
   const notifyNew = useCallback(
     (m: Message) => {
       if (m.senderId === me.id || m.deletedAt) return;
+      if (notifiedIdsRef.current.has(m.id)) return;
+      notifiedIdsRef.current.add(m.id);
+      if (notifiedIdsRef.current.size > 200) {
+        const arr = Array.from(notifiedIdsRef.current);
+        notifiedIdsRef.current = new Set(arr.slice(100));
+      }
+
       const st = stateRef.current;
       const ch = st.channels[m.channelId];
       if (!ch) return;
@@ -232,19 +241,40 @@ export function ChatProvider({ me, onUnauthorized, children }: { me: User; onUna
       if (!shouldNotify(ch.notifyLevel, ch.type, mentioned)) return;
       const visible = document.visibilityState === 'visible';
       if (visible && st.activeId === m.channelId && document.hasFocus()) return;
+
+      const call = parseCallLog(m.content);
+      // Nếu là cuộc gọi đã kết thúc hoặc từ chối, không hiện toast tin nhắn trùng lặp
+      if (call) {
+        if (call.status === 'ended' || call.status === 'declined') return;
+      }
+      const card = parseContactCard(m.content);
+
       const title = mentioned
         ? `${m.sender.name} đã nhắc đến bạn`
         : ch.type === 'DIRECT'
           ? m.sender.name
           : `${m.sender.name} · ${channelTitle(ch, me)}`;
-      const body = m.content || (m.attachments.length ? (m.attachments.every((a) => a.isImage) ? '[Ảnh]' : `[Tệp] ${m.attachments[0].filename}`) : '');
+
+      let body = m.content || '';
+      let badge = ch.type === 'ANNOUNCEMENT' ? 'Thông báo' : ch.type === 'COMMUNITY' ? 'Cộng đồng' : mentioned ? '@ Nhắc tên' : ch.type === 'CLASS' ? ch.courseCode ?? undefined : undefined;
+
+      if (call) {
+        body = '📞 Cuộc gọi nhỡ';
+        badge = 'Cuộc gọi nhỡ';
+      } else if (card) {
+        body = `📇 [Danh thiếp] ${card.name}`;
+        badge = 'Danh thiếp';
+      } else if (!body && m.attachments?.length) {
+        body = m.attachments.every((a) => a.isImage) ? '[Ảnh]' : `[Tệp] ${m.attachments[0].filename}`;
+      }
+
       playSound();
       if (!visible && showBrowserNotification(title, body, `channel-${ch.id}`, () => jumpTo(ch.id, m.id))) return;
       toast.push({
         kind: 'message',
         title,
         body,
-        badge: ch.type === 'ANNOUNCEMENT' ? 'Thông báo' : ch.type === 'COMMUNITY' ? 'Cộng đồng' : mentioned ? '@ Nhắc tên' : ch.type === 'CLASS' ? ch.courseCode ?? undefined : undefined,
+        badge,
         avatar: { id: m.sender.id, name: m.sender.name, src: m.sender.avatar },
         onClick: () => jumpTo(ch.id, m.id),
       });

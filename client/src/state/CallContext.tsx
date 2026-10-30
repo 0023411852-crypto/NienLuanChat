@@ -191,6 +191,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
       toast.push({ kind: 'error', title: 'Không có kết nối mạng', body: 'Vui lòng kiểm tra lại kết nối' });
       return;
     }
+    if (targetPeer.id === me?.id) {
+      toast.push({ kind: 'warning', title: 'Không thể tự gọi cho chính mình' });
+      return;
+    }
 
     try {
       cleanUp();
@@ -276,16 +280,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   // Kết thúc cuộc gọi
   const endCall = useCallback(() => {
+    const wasCalling = status === 'calling';
     if (peer && socket?.connected) {
       socket.emit('call:end', { toUserId: peer.id, duration });
     }
     cleanUp();
     setStatus('ended');
+    toast.push({
+      kind: 'info',
+      title: wasCalling ? 'Đã huỷ cuộc gọi' : 'Cuộc gọi đã kết thúc',
+    });
     setTimeout(() => {
       setStatus('idle');
       setPeer(null);
     }, 1500);
-  }, [peer, socket, duration, cleanUp]);
+  }, [peer, socket, duration, cleanUp, status, toast]);
 
   // Bật/tắt mic
   const toggleMute = useCallback(() => {
@@ -365,9 +374,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
     // Đối phương kết thúc
     const onEnded = () => {
+      const wasIncoming = status === 'incoming';
       cleanUp();
       setStatus('ended');
-      toast.push({ kind: 'info', title: 'Cuộc gọi đã kết thúc' });
+      toast.push({
+        kind: 'info',
+        title: wasIncoming ? 'Cuộc gọi nhỡ' : 'Cuộc gọi đã kết thúc',
+      });
       setTimeout(() => {
         setStatus('idle');
         setPeer(null);

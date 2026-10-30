@@ -2148,8 +2148,6 @@ async function recordCallLog(callerId: string, toUserId: string, channelId: stri
       ackUserIds: [callerId],
     };
     io.to(`channel:${targetChannelId}`).emit('message:new', formatted);
-    io.to(`user:${callerId}`).emit('message:new', formatted);
-    io.to(`user:${toUserId}`).emit('message:new', formatted);
 
     // Đồng bộ trạng thái đã đọc cho người gọi ở mọi phiên đăng nhập
     io.to(`user:${callerId}`).emit('channel:read', {
@@ -2519,6 +2517,7 @@ io.on('connection', async (socket: Socket) => {
 
   // 8. Cuộc gọi thoại WebRTC 1 - 1 (Audio Call) kèm tự động lưu tin nhắn lịch sử cuộc gọi
   socket.on('call:invite', async ({ toUserId, channelId, offer }) => {
+    if (!toUserId || toUserId === user.id) return;
     const key = [user.id, toUserId].sort().join(':');
     ongoingCalls.set(key, { callerId: user.id, toUserId, channelId, connected: false });
 
