@@ -2519,7 +2519,11 @@ io.on('connection', async (socket: Socket) => {
   socket.on('call:invite', async ({ toUserId, channelId, offer }) => {
     if (!toUserId || toUserId === user.id) return;
     const key = [user.id, toUserId].sort().join(':');
-    ongoingCalls.set(key, { callerId: user.id, toUserId, channelId, connected: false });
+    const existing = ongoingCalls.get(key);
+    // Nếu chưa có cuộc gọi hoặc cuộc gọi trước đã hoàn tất thì khởi tạo mới
+    if (!existing || existing.connected) {
+      ongoingCalls.set(key, { callerId: user.id, toUserId, channelId, connected: false });
+    }
 
     const callerInfo = await prisma.user.findUnique({
       where: { id: user.id },

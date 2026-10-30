@@ -312,7 +312,41 @@ export function CallProvider({ children }: { children: ReactNode }) {
     if (!socket) return;
 
     // Cuộc gọi đến
-    const onIncoming = ({ caller, channelId, offer }: { caller: CallPeer; channelId?: string; offer: RTCSessionDescriptionInit }) => {
+    const onIncoming = async ({ caller, channelId, offer }: { caller: CallPeer; channelId?: string; offer: RTCSessionDescriptionInit }) => {
+      // Trường hợp 2 người cùng gọi cho nhau cùng một lúc (Call Glare)
+      if (status === 'calling' && peer?.id === caller.id) {
+        // Phân định vai trò: bên có id lớn hơn sẽ nhường và tự động trả lời offer của bên kia
+        const isYielding = me.id > caller.id;
+        if (isYielding) {
+          ringSound.stop();
+          try {
+            pendingOfferRef.current = offer;
+            channelIdRef.current = channelId || channelIdRef.current;
+            const pc = pcRef.current;
+            if (pc && localStreamRef.current) {
+              await pc.setRemoteDescription(new RTCSessionDescription(offer));
+              for (const candidate of pendingCandidatesRef.current) {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+              }
+              pendingCandidatesRef.current = [];
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              socket.emit('call:answer', { toUserId: caller.id, answer });
+              setStatus('connected');
+              if (!timerRef.current) {
+                timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+              }
+              return;
+            }
+          } catch (e) {
+            console.error('Lỗi tự động kết nối cuộc gọi đồng thời', e);
+          }
+        } else {
+          // Bên có id nhỏ hơn giữ vai trò người gọi, chờ answer từ đối phương
+          return;
+        }
+      }
+
       if (status !== 'idle') {
         // Đang bận cuộc gọi khác
         socket.emit('call:reject', { toUserId: caller.id, reason: 'busy' });
