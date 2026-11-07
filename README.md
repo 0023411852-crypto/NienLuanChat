@@ -94,7 +94,7 @@ cp server/.env.example server/.env           # Windows: copy server\.env.example
 ```env
 DATABASE_URL="postgresql://khoachat:khoachat@localhost:5432/khoachat?schema=public"
 JWT_SECRET="doi-chuoi-bi-mat-nay-khi-trien-khai"
-PORT=4000
+PORT=4001
 CLIENT_ORIGIN="http://localhost:5173"
 # ALLOWED_EMAIL_DOMAIN="student.ctu.edu.vn"   # (tuỳ chọn) chỉ cho đăng ký bằng email trường
 # VAPID_PUBLIC_KEY="" / VAPID_PRIVATE_KEY=""   # (tuỳ chọn) khoá Web Push
@@ -114,7 +114,7 @@ npm run db:seed        # tạo dữ liệu mẫu (XOÁ dữ liệu cũ!)
 ### 5. Chạy chế độ phát triển
 
 ```bash
-npm run dev            # chạy song song server (cổng 4000) và client (cổng 5173)
+npm run dev            # chạy song song server (cổng 4001) và client (cổng 5173)
 ```
 
 Mở **http://localhost:5173** và đăng nhập bằng một tài khoản bên dưới.
