@@ -14,7 +14,7 @@
     "db:reset": "npx prisma db push --force-reset && npx tsx src/seed.ts",
     "test:realtime": "npx tsx ../scripts/test-realtime.ts",
     "test:features": "npx tsx ../scripts/test-features.ts",
-    "test": "npm run test:realtime && npm run test:features"
+    "test": "npx tsx ../scripts/run-tests.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
