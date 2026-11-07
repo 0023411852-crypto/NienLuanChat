@@ -169,13 +169,15 @@ async function run() {
 
     // 10. Chống gửi trùng clientId (Idempotency)
     // Bước 10a: Đếm chính xác số bản ghi trong DB qua endpoint /message-count
-    const fetchCount = async () => {
+    const fetchCount = async (): Promise<number> => {
       const r = await fetch(
         `${BASE_URL}/api/channels/${classChannel.id}/message-count`,
         { headers: { Authorization: `Bearer ${authSv1.token}` } }
       );
-      const d = (await r.json()) as { total: number };
-      return d.total;
+      if (!r.ok) throw new Error(`message-count thất bại: HTTP ${r.status}`);
+      const d = await r.json() as { total: unknown };
+      if (!Number.isInteger(d.total)) throw new Error(`message-count trả về giá trị không hợp lệ: ${JSON.stringify(d)}`);
+      return d.total as number;
     };
 
     const countBefore = await fetchCount();
@@ -229,13 +231,10 @@ async function run() {
     // 14. Đánh dấu đã nhận tin (2 dấu tích)
     console.log('\n--- PHẦN 5: Trạng thái Đã nhận (2 dấu tích) & Đã đọc ---');
 
-    // Lấy seq lớn nhất thực tế trong kênh để gửi đúng maxSeq
-    const latestMsgRes = await fetch(
-      `${BASE_URL}/api/channels/${classChannel.id}/messages?limit=1`,
-      { headers: { Authorization: `Bearer ${authSv1.token}` } }
-    );
-    const latestMsgData = (await latestMsgRes.json()) as { messages: any[] };
-    const latestSeq: number = latestMsgData.messages?.[0]?.seq ?? msgSeq1;
+    // maxSeq gửi đi chính là seq của tin nhắn 8 đã biết chắc (ackResult.message.seq).
+    // Không cần gọi API vì msgSeq1 đã được xác nhận ở Test 11.
+    // Nếu muốn báo cáo "đã nhận tất cả tin đến seq này", dùng đúng giá trị đã gửi.
+    const reportedMaxSeq: number = msgSeq1;
 
     let receivedEvent = false;
     let receivedEventData: any = null;
@@ -246,19 +245,18 @@ async function run() {
       }
     });
 
-    // SV2 gửi báo cáo đã nhận với maxSeq thực tế
-    s2.emit('message:received', { channelId: classChannel.id, maxSeq: latestSeq });
+    // SV2 gửi báo cáo đã nhận với maxSeq = seq của tin nhắn 8
+    s2.emit('message:received', { channelId: classChannel.id, maxSeq: reportedMaxSeq });
     await sleep(400);
 
-    // Xác minh: sự kiện đến đúng kênh, userId đúng, maxSeq >= latestSeq (seq thực tế đã gửi lên server)
+    // Xác minh: sự kiện đến đúng kênh, đúng user gửi báo cáo, maxSeq === giá trị đã gửi
     assert(
       receivedEvent &&
       receivedEventData?.channelId === classChannel.id &&
       receivedEventData?.userId === authSv2.user.id &&
-      typeof receivedEventData?.maxSeq === 'number' &&
-      receivedEventData.maxSeq >= latestSeq,
-      '14. message:received đến đúng kênh, đúng người báo cáo, maxSeq >= seq lớn nhất hiện tại',
-      `channelId=${receivedEventData?.channelId}, userId=${receivedEventData?.userId}, maxSeq=${receivedEventData?.maxSeq} (cần >= latestSeq=${latestSeq})`
+      receivedEventData?.maxSeq === reportedMaxSeq,
+      '14. message:received đến đúng kênh, đúng userId báo cáo, maxSeq khớp với giá trị đã gửi',
+      `channelId=${receivedEventData?.channelId}, userId=${receivedEventData?.userId}, maxSeq=${receivedEventData?.maxSeq} (cần === reportedMaxSeq=${reportedMaxSeq})`
     );
 
     // 15. Đánh dấu đã đọc tin nhắn (channel:read)
@@ -269,19 +267,12 @@ async function run() {
     assert(readAck?.ok === true, '15. Gửi yêu cầu đánh dấu đã đọc thành công (channel:read)');
 
     // 16. Đồng bộ đã đọc giữa 2 tab của cùng một người dùng
-    // seq của tin nhắn mà channel:read sẽ đánh dấu (dùng /api/channels/:id để lấy seq thực tế)
-    const targetMsg = await (async () => {
-      const r = await fetch(
-        `${BASE_URL}/api/channels/${classChannel.id}/messages?limit=1`,
-        { headers: { Authorization: `Bearer ${authSv1.token}` } }
-      );
-      const d = (await r.json()) as { messages: any[] };
-      // Lấy seq của chính tin nhắn mà ta sẽ đánh dấu (ackResult.message)
-      const target = d.messages?.find((m: any) => m.id === ackResult?.message?.id);
-      return target ?? d.messages?.[0];
-    })();
-    // expectedReadSeq là seq của tin nhắn được đánh dấu đọc
-    const expectedReadSeq: number = targetMsg?.seq ?? (ackResult?.message?.seq as number);
+    // expectedReadSeq lấy trực tiếp từ ackResult.message.seq – chính là tin nhắn được đánh dấu đọc.
+    // Không cần gọi API để tra cứu lại vì ta đang gửi đúng messageId này vào channel:read.
+    const expectedReadSeq: number = ackResult?.message?.seq;
+    if (!Number.isInteger(expectedReadSeq)) {
+      throw new Error('Không xác định được seq của tin nhắn cần đánh dấu đọc (ackResult.message.seq)');
+    }
 
     // Lấy lastReadSeq của SV1 TRƯỚC khi gửi channel:read
     const seqBeforeRes = await fetch(
