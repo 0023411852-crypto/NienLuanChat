@@ -404,7 +404,7 @@
           <span class="cn-actor actor-all">Tất cả người dùng đã đăng nhập</span>
         </li>
         <li>
-          <div class="cn-left"><span class="cn-code">CN15</span><span class="cn-sep">–</span><span class="cn-name">Đánh dấu đã đọc và xác nhận đã đọc thông báo quan trọng</span></div>
+          <div class="cn-left"><span class="cn-code">CN15</span><span class="cn-sep">–</span><span class="cn-name">Tự động ghi nhận đã đọc khi xem tin và thống kê lượt xem thông báo</span></div>
           <span class="cn-actor actor-student">Sinh viên, Giảng viên</span>
         </li>
         <li>
@@ -446,7 +446,7 @@
 
       <h2 class="section-title"><span class="badge">2</span> Sơ Đồ Use Case Tổng Quát</h2>
       <p>
-        Hệ thống phân định 3 nhóm tác nhân chính: <strong>Sinh viên</strong> (giao tiếp, nộp bài, đọc thông báo), <strong>Giảng viên</strong> (quản lý lớp học phần, đăng thông báo, ghim tin) và <strong>Quản trị viên</strong> (quản lý người dùng qua CSV, phân quyền, thống kê). Tất cả tương tác đều được xác thực tập trung bằng token JWT an toàn.
+        Hệ thống phân định 3 nhóm tác nhân chính: <strong>Sinh viên</strong> (giao tiếp, nộp file, hệ thống tự động ghi nhận trạng thái đã đọc khi mở xem kênh), <strong>Giảng viên</strong> (điều hành lớp học phần, đăng thông báo, ghim tin, theo dõi danh sách ai đã xem / chưa xem thông báo) và <strong>Quản trị viên</strong> (quản lý người dùng qua CSV, phân quyền, thống kê). Tất cả tương tác đều được xác thực tập trung bằng token JWT an toàn.
       </p>
 
       <div class="diagram-container">
@@ -524,7 +524,7 @@
           </g>
           <g transform="translate(295, 426)">
             <ellipse cx="0" cy="0" rx="92" ry="19" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
-            <text x="0" y="4" font-size="9" font-weight="600" fill="#1e293b" text-anchor="middle">Xác nhận đã đọc thông báo</text>
+            <text x="0" y="4" font-size="8.5" font-weight="600" fill="#1e293b" text-anchor="middle">Tự động ghi nhận đã đọc</text>
           </g>
 
           <!-- Use Cases Column 2 (Right within Boundary) -->
@@ -571,6 +571,7 @@
           <line x1="110" y1="350" x2="203" y2="146" stroke="#d97706" stroke-width="1.2"/>
           <line x1="110" y1="350" x2="203" y2="258" stroke="#d97706" stroke-width="1.2"/>
           <line x1="110" y1="350" x2="203" y2="314" stroke="#d97706" stroke-width="1.2"/>
+          <line x1="110" y1="350" x2="203" y2="426" stroke="#d97706" stroke-width="1.2"/>
           <line x1="110" y1="350" x2="453" y2="202" stroke="#d97706" stroke-width="1.2"/>
           <line x1="110" y1="350" x2="453" y2="258" stroke="#d97706" stroke-width="1.2"/>
           <line x1="110" y1="350" x2="453" y2="314" stroke="#d97706" stroke-width="1.2"/>
@@ -583,7 +584,7 @@
           <line x1="730" y1="250" x2="637" y2="370" stroke="#dc2626" stroke-width="1.2"/>
           <line x1="730" y1="250" x2="637" y2="426" stroke="#dc2626" stroke-width="1.2"/>
         </svg>
-        <div class="diagram-caption">Hình 1. Sơ đồ Use Case tổng quát hệ thống KhoaChat</div>
+        <div class="diagram-caption">Hình 1. Sơ đồ Use Case tổng quát hệ thống KhoaChat (Tự động ghi nhận đã đọc khi xem tin)</div>
       </div>
     </div>
 
@@ -654,9 +655,9 @@
             <text x="8" y="74" fill="#1d4ed8" font-weight="700">FK  userId : UUID</text>
             <text x="8" y="90" fill="#334155">role : MemberRole</text>
             <text x="8" y="106" fill="#334155">notifyLevel : NotifyLevel</text>
-            <text x="8" y="122" fill="#334155">lastReadSeq : Int = 0</text>
+            <text x="8" y="122" fill="#059669" font-weight="700">lastReadSeq : Int = 0</text>
             <text x="8" y="138" fill="#6b21a8" font-weight="600">UK (channelId, userId)</text>
-            <text x="8" y="150" fill="#64748b" font-size="7pt">joinedAt : DateTime</text>
+            <text x="8" y="150" fill="#64748b" font-size="7pt">lastReadAt, joinedAt</text>
           </g>
 
           <!-- PushSubscription Table -->
@@ -800,8 +801,8 @@
               <span class="tag tag-fk">FK</span> channelId &rarr; Channel(id)<br>
               <span class="tag tag-fk">FK</span> userId &rarr; User(id)
             </td>
-            <td>role (OWNER, MODERATOR, MEMBER), notifyLevel (DEFAULT, ALL, MENTIONS, NONE), lastReadSeq, joinedAt</td>
-            <td><span class="tag tag-uk">UNIQUE(channelId, userId)</span>; ON DELETE CASCADE xóa thành viên khi xóa kênh/người dùng.</td>
+            <td>role (OWNER, MODERATOR, MEMBER), notifyLevel (DEFAULT, ALL, MENTIONS, NONE), lastReadSeq, lastReadAt</td>
+            <td><span class="tag tag-uk">UNIQUE(channelId, userId)</span>; <code>lastReadSeq</code> tự động tăng khi xem tin; ON DELETE CASCADE.</td>
           </tr>
           <tr>
             <td><strong>Message</strong><br><span style="font-size:7.5pt; color:#64748b;">(Tin nhắn)</span></td>
@@ -812,7 +813,7 @@
               <span class="tag tag-fk">FK</span> replyToId, pinnedById
             </td>
             <td>seq (số thứ tự tự tăng trong kênh), type (TEXT, FILE, IMAGE, SYSTEM), content, pinned, deletedAt</td>
-            <td>Chống trùng lặp tin bằng <code>clientId</code>; index (channelId, seq) hỗ trợ tải bù tin tức thời.</td>
+            <td>Chống trùng lặp tin bằng <code>clientId</code>; index (channelId, seq) hỗ trợ tải bù tin tức thời; tính đã đọc khi lastReadSeq &ge; seq.</td>
           </tr>
           <tr>
             <td><strong>Attachment</strong><br><span style="font-size:7.5pt; color:#64748b;">(Tệp đính kèm)</span></td>
@@ -849,7 +850,7 @@
       </table>
 
       <div class="info-callout">
-        <strong>Chiến lược tối ưu hóa & Lập chỉ mục (Indexing):</strong> Hệ thống cấu hình Full-text Search tự động trên cột <code>content</code> của bảng Message thông qua <code>tsvector</code> kết hợp tiện ích mở rộng <code>unaccent</code> của PostgreSQL, giúp sinh viên và giảng viên tìm kiếm tin nhắn tiếng Việt không phân biệt dấu với độ phản hồi dưới 5ms.
+        <strong>Cơ chế tự động đồng bộ đã đọc & Tìm kiếm tối ưu:</strong> Hệ thống tự động ghi nhận trạng thái đã đọc khi thành viên mở xem kênh (cập nhật <code>ChannelMember.lastReadSeq</code> tiến lên mức mới nhất, không cần thao tác bấm thủ công). Giảng viên có thể xem thống kê danh sách thành viên đã đọc hoặc chưa đọc thông báo lớp (xác định qua điều kiện <code>lastReadSeq &ge; msg.seq</code>). Cột <code>content</code> được lập chỉ mục <code>tsvector</code> + <code>unaccent</code> cho phép tìm kiếm tiếng Việt không dấu dưới 5ms.
       </div>
     </div>
 
@@ -939,7 +940,7 @@
               - Xây dựng luồng đăng ký, đăng nhập và lưu trữ phiên.<br>
               - Tích hợp Socket.IO client, sự kiện soạn tin, online presence.<br>
               - Phát triển kho lưu trữ IndexedDB outbox gửi tin khi offline.<br>
-              - Gợi ý @mention, toast thông báo và nút "Tôi đã đọc".
+              - Gợi ý @mention, toast thông báo và xử lý tự động xóa badge đã đọc khi người dùng cuộn xem kênh.
             </td>
           </tr>
           <tr>
@@ -952,7 +953,7 @@
               - Xây dựng hệ thống REST API Express và phân quyền bảo mật.<br>
               - Module tải tệp đa luồng, kiểm tra magic bytes, bảo mật tệp.<br>
               - Bộ máy tìm kiếm full-text search không phân biệt dấu.<br>
-              - Trang quản trị (Admin Dashboard), import sinh viên qua CSV.
+              - Trang quản trị, import CSV và API thống kê danh sách thành viên đã xem / chưa xem thông báo.
             </td>
           </tr>
           <tr>
