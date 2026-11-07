@@ -34,6 +34,11 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+
+// Health-check endpoint – dùng bởi run-tests.ts để xác nhận đúng server KhoaChat
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, service: 'khoachat', pid: process.pid });
+});
 // Cấu hình Multer upload
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
