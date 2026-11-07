@@ -48,7 +48,44 @@ const storage = multer.diskStorage({
     cb(null, unique);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+
+const BANNED_EXTENSIONS = new Set(['.exe', '.bat', '.cmd', '.sh', '.vbs', '.msi', '.dll', '.com', '.scr', '.ps1']);
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB theo đúng tài liệu
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (BANNED_EXTENSIONS.has(ext)) {
+      return cb(new Error('Loại tệp không được hỗ trợ vì lý do an toàn'));
+    }
+    cb(null, true);
+  },
+});
+
+function checkMagicBytes(filePath: string, ext: string): boolean {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(8);
+    fs.readSync(fd, buffer, 0, 8, 0);
+    fs.closeSync(fd);
+
+    if (['.jpg', '.jpeg'].includes(ext)) {
+      return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    }
+    if (ext === '.png') {
+      return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    }
+    if (ext === '.gif') {
+      return buffer.subarray(0, 3).toString() === 'GIF';
+    }
+    if (ext === '.pdf') {
+      return buffer.subarray(0, 4).toString() === '%PDF';
+    }
+    return true; // Tài liệu văn phòng, zip, code cho phép bình thường
+  } catch {
+    return false;
+  }
+}
 
 // ==========================================
 // CHANNEL MODERATION STATE (CẤM CHAT & KHÓA CHAT)
@@ -237,6 +274,47 @@ async function getFormattedChannel(channelId: string, userId: string, role: stri
   };
 }
 
+/**
+ * Kiểm tra tập trung quyền truy cập kênh (RBAC & Membership):
+ * - canView: Có quyền đọc danh sách, tin nhắn, tệp, ghim của kênh
+ * - canPost: Có quyền gửi tin nhắn, tải tệp lên kênh
+ * - canPin: Có quyền ghim/bỏ ghim tin nhắn
+ * - canManage: Có quyền quản lý kênh (chủ sở hữu hoặc moderator/admin)
+ */
+async function checkChannelAccess(channelId: string, userId: string, userRole: string): Promise<{
+  channel: any | null;
+  membership: any | null;
+  canView: boolean;
+  canPost: boolean;
+  canPin: boolean;
+  canManage: boolean;
+}> {
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    include: { members: true },
+  });
+  if (!channel) {
+    return { channel: null, membership: null, canView: false, canPost: false, canPin: false, canManage: false };
+  }
+
+  const membership = channel.members.find((m: any) => m.userId === userId) || null;
+  const isAdmin = userRole === 'ADMIN';
+  const isOwner = membership?.role === 'OWNER';
+  const isMod = membership?.role === 'MODERATOR' || isOwner || isAdmin;
+  const isDirect = channel.type === 'DIRECT';
+  const isAnnouncement = channel.type === 'ANNOUNCEMENT';
+
+  const canView = isAdmin || isAnnouncement || !!membership;
+  let canPost = canView && (isAnnouncement ? userRole !== 'STUDENT' : (isAdmin || !!membership));
+  if (mutedMembers.has(`${channelId}:${userId}`)) canPost = false;
+  if (channelChatLocked.has(channelId) && !isMod) canPost = false;
+
+  const canPin = isAdmin || isDirect || isMod || (channel.type === 'CLASS' && userRole === 'LECTURER');
+  const canManage = isMod;
+
+  return { channel, membership, canView, canPost, canPin, canManage };
+}
+
 // Giới hạn số lần thử đăng nhập sai liên tục để chống Brute-Force
 const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
@@ -419,8 +497,12 @@ app.get('/api/channels', requireAuth, async (req: AuthenticatedRequest, res) => 
 });
 
 app.get('/api/channels/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const access = await checkChannelAccess(req.params.id, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canView) {
+    return res.status(403).json({ error: 'Bạn không có quyền truy cập kênh này' });
+  }
   const ch = await getFormattedChannel(req.params.id, req.user!.id, req.user!.role);
-  if (!ch) return res.status(404).json({ error: 'Kênh không tồn tại' });
   res.json({ channel: ch });
 });
 
@@ -577,8 +659,14 @@ app.get('/api/channels/:id/message-count', requireAuth, async (req: Authenticate
   res.json({ channelId, total });
 });
 
-app.get('/api/channels/:id/pins', requireAuth, async (req, res) => {
+app.get('/api/channels/:id/pins', requireAuth, async (req: AuthenticatedRequest, res) => {
   const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canView) {
+    return res.status(403).json({ error: 'Bạn không có quyền xem tin ghim của kênh này' });
+  }
+
   const [pins, members] = await Promise.all([
     prisma.message.findMany({
       where: { channelId, pinned: true },
@@ -619,6 +707,12 @@ app.post('/api/messages/:id/pin', requireAuth, async (req: AuthenticatedRequest,
   const { pinned } = req.body;
   const msg = await prisma.message.findUnique({ where: { id } });
   if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
+
+  const access = await checkChannelAccess(msg.channelId, req.user!.id, req.user!.role);
+  if (!access.canPin) {
+    return res.status(403).json({ error: 'Bạn không có quyền ghim tin nhắn trong kênh này' });
+  }
+
   const isPinned = pinned !== undefined ? !!pinned : !msg.pinned;
   const updated = await prisma.message.update({
     where: { id },
@@ -803,9 +897,27 @@ app.get('/api/channels/:id/links', requireAuth, async (req: AuthenticatedRequest
   res.json({ links });
 });
 
-// Upload tệp vào kênh
+// Upload tệp vào kênh (kiểm tra membership, allowlist và magic bytes)
 app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res) => {
   if (!req.file) return res.status(400).json({ error: 'Không có tệp đính kèm' });
+
+  const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(404).json({ error: 'Kênh không tồn tại' });
+  }
+  if (!access.canPost) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(403).json({ error: 'Bạn không có quyền tải tệp lên kênh này' });
+  }
+
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!checkMagicBytes(req.file.path, ext)) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(415).json({ error: 'Nội dung tệp không hợp lệ hoặc giả mạo phần mở rộng' });
+  }
+
   const isImage = req.file.mimetype.startsWith('image/');
   const attachment = await prisma.attachment.create({
     data: {
@@ -815,7 +927,7 @@ app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async 
       isImage,
       path: req.file.filename,
       url: '',
-      channelId: req.params.id,
+      channelId,
       uploaderId: req.user!.id,
     },
   });
@@ -859,7 +971,13 @@ app.get('/api/files/:id', requireAuth, async (req: AuthenticatedRequest, res) =>
   const filePath = path.join(UPLOAD_DIR, att.path);
   if (!fs.existsSync(filePath)) return res.status(404).send('Tệp đã bị xoá');
   res.setHeader('Content-Type', att.mime);
-  res.download(filePath, att.filename);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  if (req.query.download === '1') {
+    res.download(filePath, att.filename);
+  } else {
+    res.sendFile(filePath);
+  }
 });
 
 // Báo cáo xác nhận đã đọc thông báo (Dùng ChannelMember.lastReadSeq theo đề xuất của Thầy)
@@ -1245,6 +1363,10 @@ app.get('/api/search', requireAuth, async (req: AuthenticatedRequest, res) => {
     where.content = { contains: q, mode: 'insensitive' };
   }
   if (channelId) {
+    // Ràng buộc bảo mật: chỉ được tìm kiếm trong kênh mà mình là thành viên
+    if (req.user!.role !== 'ADMIN' && !chIds.includes(channelId)) {
+      return res.status(403).json({ error: 'Bạn không có quyền tìm kiếm trong kênh này' });
+    }
     where.channelId = channelId;
   } else if (req.user!.role !== 'ADMIN') {
     where.channelId = { in: chIds };
@@ -1330,7 +1452,13 @@ app.get('/api/search/files', requireAuth, async (req: AuthenticatedRequest, res)
 
   const where: any = {};
   if (q) where.filename = { contains: q, mode: 'insensitive' };
-  if (req.user!.role !== 'ADMIN') {
+  const channelId = req.query.channelId as string | undefined;
+  if (channelId) {
+    if (req.user!.role !== 'ADMIN' && !chIds.includes(channelId)) {
+      return res.status(403).json({ error: 'Bạn không có quyền tìm kiếm tệp trong kênh này' });
+    }
+    where.channelId = channelId;
+  } else if (req.user!.role !== 'ADMIN') {
     where.channelId = { in: chIds };
   }
 
@@ -2142,8 +2270,18 @@ app.post('/api/channels/join/:token', requireAuth, async (req: AuthenticatedRequ
   res.json({ channel: { id: channel.id } });
 });
 
-// Static presets & files
-app.use('/uploads', express.static(UPLOAD_DIR));
+// Bảo mật thư mục tải lên: Tuyệt đối KHÔNG phục vụ static tự do /uploads.
+// Chỉ cho phép ảnh avatar công khai, mọi tệp đính kèm phải qua /api/files/:id có kiểm tra quyền thành viên kênh.
+app.get('/uploads/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const ext = path.extname(filename).toLowerCase();
+  if (!['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
+    return res.status(403).send('Truy cập tệp đính kèm bắt buộc qua /api/files/:id có xác thực quyền thành viên');
+  }
+  const filePath = path.join(UPLOAD_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Không tìm thấy tệp');
+  res.sendFile(filePath);
+});
 
 // ==========================================
 // 3. SOCKET.IO REALTIME
@@ -2217,27 +2355,32 @@ io.on('connection', async (socket: Socket) => {
         }
       }
 
-      const ch = await prisma.channel.findUnique({ where: { id: channelId } });
-      if (!ch) return ack?.({ ok: false, error: 'Kênh không tồn tại' });
+      // Kiểm tra quyền thành viên và vai trò trong kênh tập trung (RBAC)
+      const access = await checkChannelAccess(channelId, user.id, user.role);
+      if (!access.channel) return ack?.({ ok: false, error: 'Kênh không tồn tại' });
 
-      // Kiểm tra quyền gửi trong kênh thông báo
-      if (ch.type === 'ANNOUNCEMENT' && user.role === 'STUDENT') {
-        return ack?.({ ok: false, error: 'Chỉ giảng viên/quản trị viên mới được đăng thông báo', code: 'FORBIDDEN' });
+      if (!access.canPost) {
+        let errMsg = 'Bạn không có quyền gửi tin trong kênh này';
+        if (access.channel.type === 'ANNOUNCEMENT' && user.role === 'STUDENT') {
+          errMsg = 'Chỉ giảng viên/quản trị viên mới được đăng thông báo';
+        } else if (mutedMembers.has(`${channelId}:${user.id}`)) {
+          errMsg = 'Bạn đã bị cấm chat trong nhóm này';
+        } else if (channelChatLocked.has(channelId)) {
+          errMsg = 'Nhóm đang bật chế độ cấm chat, chỉ quản lý mới được gửi tin';
+        }
+        return ack?.({ ok: false, error: errMsg, code: 'FORBIDDEN' });
       }
 
-      // Kiểm tra xem người dùng có bị cấm chat không
-      if (mutedMembers.has(`${channelId}:${user.id}`)) {
-        return ack?.({ ok: false, error: 'Bạn đã bị cấm chat trong nhóm này', code: 'FORBIDDEN' });
-      }
-
-      // Kiểm tra chế độ khoá chat nhóm
-      if (channelChatLocked.has(channelId)) {
-        const mem = await prisma.channelMember.findUnique({
-          where: { channelId_userId: { channelId, userId: user.id } },
+      // Kiểm tra tệp đính kèm: tệp phải thuộc đúng kênh này
+      if (attachmentIds?.length) {
+        const validAttCount = await prisma.attachment.count({
+          where: {
+            id: { in: attachmentIds },
+            channelId,
+          },
         });
-        const isMod = mem?.role === 'OWNER' || mem?.role === 'MODERATOR' || user.role === 'ADMIN';
-        if (!isMod) {
-          return ack?.({ ok: false, error: 'Nhóm đang bật chế độ cấm chat, chỉ quản lý mới được gửi tin', code: 'FORBIDDEN' });
+        if (validAttCount !== attachmentIds.length) {
+          return ack?.({ ok: false, error: 'Tệp đính kèm không hợp lệ hoặc không thuộc kênh này', code: 'FORBIDDEN' });
         }
       }
 
@@ -2379,9 +2522,17 @@ io.on('connection', async (socket: Socket) => {
     }
   });
 
-  // 4. Ghim tin nhắn
+  // 4. Ghim tin nhắn (Kiểm tra quyền ghim của kênh)
   socket.on('message:pin', async ({ messageId, pinned }, ack) => {
     try {
+      const msg = await prisma.message.findUnique({ where: { id: messageId } });
+      if (!msg) return ack?.({ ok: false, error: 'Tin nhắn không tồn tại' });
+
+      const access = await checkChannelAccess(msg.channelId, user.id, user.role);
+      if (!access.canPin) {
+        return ack?.({ ok: false, error: 'Bạn không có quyền ghim tin nhắn trong kênh này', code: 'FORBIDDEN' });
+      }
+
       const updated = await prisma.message.update({
         where: { id: messageId },
         data: {
@@ -2458,12 +2609,18 @@ io.on('connection', async (socket: Socket) => {
     });
   });
 
-  // 6. Đánh dấu đã đọc kênh
+  // 6. Đánh dấu đã đọc kênh (kiểm tra quyền thành viên)
   socket.on('channel:read', async (data: any, ack) => {
     try {
       const channelId = data?.channelId;
       const messageId = data?.messageId;
       if (!channelId) return ack?.({ ok: false, error: 'Thiếu channelId' });
+
+      const access = await checkChannelAccess(channelId, user.id, user.role);
+      if (!access.channel) return ack?.({ ok: false, error: 'Kênh không tồn tại' });
+      if (!access.canView) {
+        return ack?.({ ok: false, error: 'Bạn không có quyền truy cập kênh này', code: 'FORBIDDEN' });
+      }
 
       let lastSeq = data?.maxSeq || data?.seq || 0;
       if (messageId) {
