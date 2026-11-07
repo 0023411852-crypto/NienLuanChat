@@ -173,7 +173,12 @@ async function run() {
       clientId: clientId1, // Gửi lại cùng clientId
       content: 'Thử gửi trùng clientId',
     });
-    assert(duplicateAck?.duplicate === true || duplicateAck?.ok === true, '10. Cơ chế chống gửi trùng tin nhắn bằng clientId');
+    assert(
+      duplicateAck?.ok === true &&
+      duplicateAck?.duplicate === true &&
+      duplicateAck?.message?.id === ackResult?.message?.id,
+      '10. Cơ chế chống gửi trùng tin nhắn bằng clientId (trả lại đúng ID tin cũ, không sinh bản ghi mới)'
+    );
 
     // 11. Tin nhắn có thứ tự tăng dần (seq)
     const msgSeq1 = ackResult?.message?.seq;
@@ -209,8 +214,8 @@ async function run() {
       if (d.channelId === classChannel.id) receivedEvent = true;
     });
     s2.emit('message:received', { channelId: classChannel.id, maxSeq: msgSeq1 });
-    await sleep(200);
-    assert(receivedEvent || true, '14. Cập nhật và phát sự kiện tin nhắn đã nhận (message:received)');
+    await sleep(300);
+    assert(receivedEvent, '14. Cập nhật và phát sự kiện tin nhắn đã nhận (message:received)');
 
     // 15. Đánh dấu đã đọc tin nhắn (channel:read)
     const readAck = await emitWithAck(s2, 'channel:read', {
@@ -227,9 +232,9 @@ async function run() {
       if (d.channelId === classChannel.id) syncReadTab2 = true;
     });
     s1.emit('channel:read', { channelId: classChannel.id, messageId: ackResult?.message?.id });
-    await sleep(200);
+    await sleep(300);
     s1Tab2.close();
-    assert(syncReadTab2 || true, '16. Đồng bộ trạng thái đã đọc giữa 2 tab của cùng tài khoản');
+    assert(syncReadTab2, '16. Đồng bộ trạng thái đã đọc giữa 2 tab của cùng tài khoản');
 
     // 17. Đảm bảo trạng thái đọc không bị lùi seq (Monotonic)
     const backwardAck = await emitWithAck(s2, 'channel:read', {
