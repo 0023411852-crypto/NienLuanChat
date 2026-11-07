@@ -14,6 +14,7 @@
  */
 
 import { spawn, execSync } from 'child_process';
+import net from 'net';
 import path from 'path';
 import fs from 'fs';
 
@@ -40,13 +41,30 @@ async function checkHealth(): Promise<{ ok: boolean; service: string; pid: numbe
     clearTimeout(timer);
     if (!res || !res.ok) return null;
     const data = await res.json() as Record<string, unknown>;
-    if (data?.ok === true && data?.service === HEALTH_SERVICE) {
+    // Fix B: validate đầy đủ các trường, kể cả pid phải là số nguyên dương
+    if (
+      data?.ok === true &&
+      data?.service === HEALTH_SERVICE &&
+      Number.isInteger(data?.pid) &&
+      (data.pid as number) > 0
+    ) {
       return data as { ok: boolean; service: string; pid: number };
     }
     return null;
   } catch {
     return null;
   }
+}
+
+/** Kiểm tra TCP port có đang được lắng nghe hay không (không phụ thuộc HTTP).
+ *  Chính xác hơn fetch() vì phát hiện bất kỳ tiến trình nào đang bind port,
+ *  kể cả tiến trình không phục vụ HTTP. */
+function isTcpPortInUse(port: number, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ port, host });
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => { socket.destroy(); resolve(false); });
+  });
 }
 
 /** Poll /api/health cho đến khi KhoaChat phản hồi hoặc timeout */
@@ -97,19 +115,13 @@ async function main() {
     console.log(`♻️   KhoaChat đang chạy sẵn (PID ${existingHealth.pid}). Dùng lại, không spawn thêm.\n`);
     reusingExisting = true;
   } else {
-    // Kiểm tra cổng có bị chiếm bởi tiến trình khác không
-    const portBusy = await (async () => {
-      try {
-        const ctrl  = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 1500);
-        const res   = await fetch(SERVER_URL, { signal: ctrl.signal }).catch(() => null);
-        clearTimeout(timer);
-        return !!res;   // có phản hồi nhưng không phải KhoaChat
-      } catch { return false; }
-    })();
+    // Fix A: dùng TCP check thay vì fetch() để phát hiện mọi tiến trình đang chiếm cổng,
+    // kể cả tiến trình không phục vụ HTTP (fetch() sẽ thất bại và tưởng cổng trống).
+    const serverPort = parseInt(new URL(SERVER_URL).port || '4001', 10);
+    const portBusy = await isTcpPortInUse(serverPort);
 
     if (portBusy) {
-      console.error(`❌  Cổng ${SERVER_URL} đang được chiếm bởi tiến trình KHÔNG PHẢI KhoaChat.`);
+      console.error(`❌  Cổng ${serverPort} đang bị chiếm bởi tiến trình KHÔNG PHẢI KhoaChat.`);
       console.error('    Hãy dừng tiến trình đó trước rồi chạy lại npm test.');
       process.exit(1);
     }
@@ -150,7 +162,14 @@ async function main() {
     }
 
     const confirmedHealth = await checkHealth();
-    console.log(`✅  Server sẵn sàng (PID ${confirmedHealth?.pid ?? spawnedPid}). Bắt đầu chạy test...\n`);
+    // Fix C: nếu health-check trả về null ở đây, server đã crash sau khi đã sẵn sàng → dừng
+    if (!confirmedHealth) {
+      console.error('❌  Server không còn phản hồi ngay sau khi xác nhận sẵn sàng (đã crash?).');
+      console.error('    Kiểm tra log server ở trên để tìm nguyên nhân.');
+      if (spawnedPid) killTree(spawnedPid);
+      process.exit(1);
+    }
+    console.log(`✅  Server sẵn sàng (PID ${confirmedHealth.pid}). Bắt đầu chạy test...\n`);
   }
 
   // ── 3. Phát hiện và chạy các script test ────────────────────────────────
