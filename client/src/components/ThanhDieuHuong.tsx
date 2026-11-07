@@ -101,7 +101,7 @@ export default function ThanhDieuHuong({
 
           <button
             onClick={() => onTabChange('contacts')}
-            title="Danh bạ & Bạn bè"
+            title="Danh bạ nội bộ"
             className={`relative flex h-11 w-11 items-center justify-center rounded-2xl transition ${
               activeTab === 'contacts'
                 ? 'bg-white/20 text-white shadow-inner font-semibold'
@@ -109,11 +109,6 @@ export default function ThanhDieuHuong({
             }`}
           >
             <ContactBookIcon className="h-6 w-6" />
-            {pendingRequestsTotal > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow">
-                {pendingRequestsTotal > 99 ? '99+' : pendingRequestsTotal}
-              </span>
-            )}
           </button>
         </div>
       </div>

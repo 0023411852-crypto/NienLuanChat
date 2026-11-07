@@ -16,7 +16,6 @@ import {
   PinIcon,
   ShieldIcon,
   TrashIcon,
-  UserMinusIcon,
   VideoIcon,
   XIcon,
 } from './BieuTuong';
@@ -27,15 +26,12 @@ export type PanelTab = 'members' | 'files' | 'pins';
 const rank: Record<string, number> = { ADMIN: 0, LECTURER: 1, STUDENT: 2 };
 
 function MembersTab({ channel }: { channel: Channel }) {
-  const { state, me, openDirect, friends, removeFriend, selectChannel } = useChat();
+  const { state, me, openDirect, selectChannel } = useChat();
   const [manage, setManage] = useState(false);
-  const [confirmUnfriend, setConfirmUnfriend] = useState(false);
   const [confirmDisband, setConfirmDisband] = useState(false);
   const [disbanding, setDisbanding] = useState(false);
   const isOwner = channel.myRole === 'OWNER' || me.role === 'ADMIN';
 
-  const peer = channel.type === 'DIRECT' ? (channel.members || []).find((m) => m.id !== me.id) : null;
-  const isFriend = peer ? friends.some((f) => f.id === peer.id) : false;
   const sorted = [...(channel.members || [])].sort(
     (a, b) => Number(!!state.online[b.id]) - Number(!!state.online[a.id]) || rank[a.role] - rank[b.role] || a.name.localeCompare(b.name, 'vi'),
   );
@@ -105,16 +101,6 @@ function MembersTab({ channel }: { channel: Channel }) {
         </button>
       )}
 
-      {/* Nút xoá bạn cho cuộc trò chuyện trực tiếp 1-1 */}
-      {channel.type === 'DIRECT' && peer && isFriend && (
-        <button
-          onClick={() => setConfirmUnfriend(true)}
-          className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-900/60 transition"
-        >
-          <UserMinusIcon className="h-4 w-4" /> Xoá kết bạn
-        </button>
-      )}
-
       <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Đang hoạt động — {online.length}</h3>
       <ul className="mb-4 space-y-0.5">{online.map(row)}</ul>
       <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ngoại tuyến — {offline.length}</h3>
@@ -158,38 +144,6 @@ function MembersTab({ channel }: { channel: Channel }) {
             </p>
             <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
               Nhóm và toàn bộ lịch sử tin nhắn sẽ bị xoá vĩnh viễn cho tất cả thành viên.
-            </p>
-          </div>
-        </Modal>
-      )}
-      {confirmUnfriend && peer && (
-        <Modal
-          title="Xác nhận xoá kết bạn"
-          onClose={() => setConfirmUnfriend(false)}
-          width="max-w-sm"
-          footer={
-            <>
-              <button className={btn.secondary} onClick={() => setConfirmUnfriend(false)}>Giữ lại</button>
-              <button
-                className={btn.danger}
-                onClick={async () => {
-                  setConfirmUnfriend(false);
-                  if (peer) {
-                    await removeFriend(peer.id);
-                  }
-                }}
-              >
-                Xoá bạn
-              </button>
-            </>
-          }
-        >
-          <div className="space-y-2">
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Bạn có chắc chắn muốn xoá kết bạn với <span className="font-semibold text-slate-800 dark:text-white">{peer.name}</span> không?
-            </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Người này sẽ bị xoá khỏi danh bạ bạn bè của bạn.
             </p>
           </div>
         </Modal>

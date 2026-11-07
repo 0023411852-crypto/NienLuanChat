@@ -971,44 +971,6 @@ app.post('/api/direct', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json({ channel: ch });
 });
 
-// Quản lý danh sách huỷ kết bạn (Lưu file để không cần sửa schema Prisma)
-const UNFRIENDED_FILE = path.join(__dirname, '../unfriended.json');
-let unfriendedPairs = new Set<string>();
-
-function loadUnfriended() {
-  try {
-    if (fs.existsSync(UNFRIENDED_FILE)) {
-      const data = JSON.parse(fs.readFileSync(UNFRIENDED_FILE, 'utf-8'));
-      unfriendedPairs = new Set(data);
-    }
-  } catch (e) {
-    console.error('Lỗi đọc unfriended.json', e);
-  }
-}
-loadUnfriended();
-
-function saveUnfriended() {
-  try {
-    fs.writeFileSync(UNFRIENDED_FILE, JSON.stringify(Array.from(unfriendedPairs), null, 2), 'utf-8');
-  } catch (e) {
-    console.error('Lỗi ghi unfriended.json', e);
-  }
-}
-
-function isUnfriended(u1: string, u2: string) {
-  return unfriendedPairs.has([u1, u2].sort().join(':'));
-}
-
-function setUnfriended(u1: string, u2: string, unfriended: boolean) {
-  const key = [u1, u2].sort().join(':');
-  if (unfriended) {
-    unfriendedPairs.add(key);
-  } else {
-    unfriendedPairs.delete(key);
-  }
-  saveUnfriended();
-}
-
 // Quản lý trạng thái đã nhận tin nhắn (2 dấu tích)
 const DELIVERED_FILE = path.join(__dirname, '../delivered.json');
 let deliveredMap = new Map<string, number>(); // "channelId:userId" -> maxSeq
@@ -1056,18 +1018,16 @@ app.get('/api/friends', requireAuth, async (req: AuthenticatedRequest, res) => {
     select: { id: true, name: true, email: true, avatar: true, role: true, studentCode: true, lastSeenAt: true },
   });
 
-  const friends = users
-    .filter((u) => !isUnfriended(userId, u.id))
-    .map((u) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      avatar: u.avatar,
-      role: u.role,
-      studentCode: u.studentCode,
-      online: onlineUsers.has(u.id),
-      lastSeenAt: u.lastSeenAt ? u.lastSeenAt.toISOString() : null,
-    }));
+  const friends = users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    avatar: u.avatar,
+    role: u.role,
+    studentCode: u.studentCode,
+    online: onlineUsers.has(u.id),
+    lastSeenAt: u.lastSeenAt ? u.lastSeenAt.toISOString() : null,
+  }));
 
   res.json({
     friends,
@@ -1082,9 +1042,6 @@ app.post('/api/friends/request', requireAuth, async (req: AuthenticatedRequest, 
   if (!targetUserId || targetUserId === myId) {
     return res.status(400).json({ error: 'Yêu cầu không hợp lệ' });
   }
-
-  // Khôi phục trạng thái kết bạn nếu trước đó từng xoá
-  setUnfriended(myId, targetUserId, false);
 
   let channel = await prisma.channel.findFirst({
     where: {
@@ -1118,8 +1075,6 @@ app.post('/api/friends/request', requireAuth, async (req: AuthenticatedRequest, 
 
   const ch = await getFormattedChannel(channel.id, myId, req.user!.role);
   io.to(`user:${myId}`).emit('channel:upsert', { channel: ch });
-  io.to(`user:${myId}`).emit('friends:updated');
-  io.to(`user:${targetUserId}`).emit('friends:updated');
 
   res.json({ ok: true, status: 'friend', channelId: channel.id });
 });
@@ -1128,8 +1083,6 @@ app.post('/api/friends/accept', requireAuth, async (req: AuthenticatedRequest, r
   const fromId = req.body.fromUserId || req.body.targetUserId;
   const myId = req.user!.id;
   if (!fromId) return res.status(400).json({ error: 'Yêu cầu không hợp lệ' });
-
-  setUnfriended(myId, fromId, false);
 
   let channel = await prisma.channel.findFirst({
     where: {
@@ -1162,9 +1115,6 @@ app.post('/api/friends/accept', requireAuth, async (req: AuthenticatedRequest, r
   }
 
   const ch = await getFormattedChannel(channel.id, myId, req.user!.role);
-  io.to(`user:${myId}`).emit('friends:updated');
-  io.to(`user:${fromId}`).emit('friends:updated');
-
   res.json({ ok: true, channel: ch });
 });
 
@@ -1172,16 +1122,10 @@ app.post('/api/friends/decline', requireAuth, async (_req, res) => {
   res.json({ ok: true });
 });
 
-// Xoá kết bạn
 app.delete('/api/friends/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
   const myId = req.user!.id;
   const targetId = req.params.id;
   if (!targetId || targetId === myId) return res.status(400).json({ error: 'Yêu cầu không hợp lệ' });
-
-  setUnfriended(myId, targetId, true);
-
-  io.to(`user:${myId}`).emit('friends:updated');
-  io.to(`user:${targetId}`).emit('friends:updated');
 
   res.json({ ok: true });
 });
@@ -1212,7 +1156,7 @@ app.get('/api/users/search', requireAuth, async (req: AuthenticatedRequest, res)
       role: u.role,
       studentCode: u.studentCode,
       online: onlineUsers.has(u.id),
-      friendStatus: isUnfriended(myId, u.id) ? 'none' : 'friend',
+      friendStatus: 'friend',
     })),
   });
 });

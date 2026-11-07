@@ -65,14 +65,6 @@ export default function ModalTheDanhBa({ onClose, onSelect }: ModalTheDanhBaProp
     studentCode?: string | null;
     avatar?: string | null;
   }) => {
-    // Check if user is a friend
-    const isFriend = friends.some(f => f.id === user.id);
-    if (!isFriend && user.id !== me.id) {
-      // If not a friend and not self, show error and return
-      toast.push({ kind: 'error', title: 'Chỉ có thể gửi danh thiếp cho bạn bè' });
-      return;
-    }
-
     onSelect({
       userId: user.id,
       name: user.name,
@@ -207,11 +199,11 @@ export default function ModalTheDanhBa({ onClose, onSelect }: ModalTheDanhBaProp
           )}
         </div>
 
-        {/* Friends list */}
+        {/* Members list */}
         <div>
           <div className="flex items-center justify-between px-1 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Bạn bè ({filteredFriends.length})
+              Danh bạ thành viên ({filteredFriends.length})
             </span>
           </div>
 
@@ -219,7 +211,7 @@ export default function ModalTheDanhBa({ onClose, onSelect }: ModalTheDanhBaProp
             {filteredFriends.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-6 text-center text-xs text-slate-400">
                 <UsersIcon className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-1.5" />
-                {friends.length === 0 ? 'Bạn chưa có người bạn nào trong danh bạ.' : 'Không có bạn bè nào khớp từ khoá.'}
+                {friends.length === 0 ? 'Chưa có thành viên nào trong danh bạ.' : 'Không có thành viên nào khớp từ khoá.'}
               </div>
             ) : (
               filteredFriends.map((f) => (

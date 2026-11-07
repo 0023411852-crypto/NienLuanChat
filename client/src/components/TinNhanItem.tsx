@@ -75,8 +75,7 @@ function ContactCardBubble({
   pinned: boolean;
   deleted: boolean;
 }) {
-  const { openDirect, friends, incomingRequests, outgoingRequests, sendFriendRequest, acceptFriendRequest, state } = useChat();
-  const [requestSent, setRequestSent] = useState(false);
+  const { openDirect, state } = useChat();
 
   if (deleted) {
     return (
@@ -87,22 +86,6 @@ function ContactCardBubble({
   }
 
   const isSelf = card.userId === meId;
-  const isFriend = friends.some((f) => f.id === card.userId);
-  const pendingReceived = incomingRequests.find((r) => r.user.id === card.userId);
-  const pendingSent = requestSent || outgoingRequests.some((r) => r.user.id === card.userId);
-
-  const handleAddFriend = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const ok = await sendFriendRequest(card.userId);
-    if (ok) setRequestSent(true);
-  };
-
-  const handleAcceptFriend = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (pendingReceived) {
-      await acceptFriendRequest(pendingReceived.id, card.userId);
-    }
-  };
 
   const handleMessage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -148,38 +131,12 @@ function ContactCardBubble({
         {isSelf ? (
           <span className="text-xs text-slate-400 italic px-2 py-1">Danh thiếp của bạn</span>
         ) : (
-          <>
-            {isFriend ? (
-              <span className="text-[11px] font-medium text-emerald-600 px-2 py-1 bg-emerald-50 rounded-lg dark:bg-emerald-950/60 dark:text-emerald-300">
-                ✓ Bạn bè
-              </span>
-            ) : pendingReceived ? (
-              <button
-                onClick={handleAcceptFriend}
-                className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
-              >
-                Chấp nhận
-              </button>
-            ) : pendingSent ? (
-              <span className="text-[11px] font-medium text-slate-500 px-2 py-1 bg-slate-100 rounded-lg dark:bg-slate-700 dark:text-slate-300">
-                Đã gửi kết bạn
-              </span>
-            ) : (
-              <button
-                onClick={handleAddFriend}
-                className="flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-sky-700"
-              >
-                + Kết bạn
-              </button>
-            )}
-
-            <button
-              onClick={handleMessage}
-              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-sky-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-sky-300 dark:hover:bg-slate-600"
-            >
-              Nhắn tin
-            </button>
-          </>
+          <button
+            onClick={handleMessage}
+            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 font-semibold text-sky-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-sky-300 dark:hover:bg-slate-600"
+          >
+            Nhắn tin
+          </button>
         )}
       </div>
     </div>
