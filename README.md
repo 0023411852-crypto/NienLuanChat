@@ -11,7 +11,7 @@ Nhắn tin **thời gian thực**, **đồng bộ trạng thái đã đọc** tr
 |---|---|
 | Ngôn ngữ | TypeScript (cả server lẫn client) |
 | Server | Node.js 20+, Express 4, Socket.IO 4, Prisma ORM 6, JWT + bcrypt, Zod |
-| Cơ sở dữ liệu | PostgreSQL 16 (có full-text search bằng `tsvector` + `unaccent`) |
+| Cơ sở dữ liệu | PostgreSQL 16 (tìm kiếm an toàn theo phạm vi kênh, không phân biệt hoa thường) |
 | Client | React 18, Vite 6, Tailwind CSS 3, socket.io-client, IndexedDB (thư viện `idb`) |
 
 ## Milestone 1 — đã làm được
@@ -40,13 +40,13 @@ Nhắn tin **thời gian thực**, **đồng bộ trạng thái đã đọc** tr
 | **@nhắc tên** | Gõ `@` → popup gợi ý thành viên kênh (lọc **không dấu**, ↑ ↓ Enter/Tab, Esc). Lưu bảng `Mention`. Tên được tô màu trong tin; tin nhắc đến **bạn** có nền vàng; sidebar có huy hiệu **@** đếm số lần bị nhắc chưa đọc. `@all` / `@channel` chỉ **giảng viên / quản trị viên** dùng được. |
 | **Ghim tin** | Quyền: GV/QTV ở mọi kênh; trong tin nhắn riêng ai cũng ghim được; trong lớp học phần chỉ GV/QTV (hoặc người được đặt làm quản lý kênh). Thanh "Tin đã ghim" trên đầu kênh + tab **Đã ghim** ở cột phải, bấm để **nhảy tới tin**. Cập nhật realtime cho mọi người. |
 | **Trả lời / sửa / xoá** | Rê chuột vào tin → thanh công cụ: Trả lời (trích dẫn tin gốc, bấm trích dẫn để nhảy tới), Sửa (tin của mình, hiện "(đã sửa)"), Xoá (thu hồi với mọi người; GV/QTV xoá được tin trong kênh mình quản lý). Tất cả realtime. |
-| **Tìm kiếm** | `Ctrl + K` (hoặc ô *Tìm kiếm* ở sidebar / biểu tượng 🔍 trên đầu kênh). Tab **Tin nhắn**: full-text search `tsvector` **không phân biệt dấu** (gõ `lich thi` ra "Lịch thi"), chỉ trong các kênh của bạn, lọc theo kênh / người gửi / có tệp đính kèm, từ khoá được tô sáng. Tab **Tệp**: tìm theo tên tệp, lọc loại tệp. Bấm kết quả → mở kênh và **nhảy tới đúng tin** (tải kèm ngữ cảnh trước/sau). |
+| **Tìm kiếm** | `Ctrl + K` (hoặc ô *Tìm kiếm* ở sidebar / biểu tượng 🔍 trên đầu kênh). Tab **Tin nhắn**: tìm kiếm từ khóa an toàn không phân biệt hoa thường, chỉ trong các kênh bạn tham gia, lọc theo kênh / người gửi / có tệp đính kèm, từ khoá được tô sáng. Tab **Tệp**: tìm theo tên tệp, lọc loại tệp. Bấm kết quả → mở kênh và **nhảy tới đúng tin** (tải kèm ngữ cảnh trước/sau). |
 | **Tài liệu của kênh** | Tab *Tài liệu* ở cột phải: lưới ảnh + danh sách tệp của kênh, lọc Ảnh / PDF / Văn bản / Bảng tính / Trình chiếu / Nén / Khác. |
 | **Thông báo** | Toast trong ứng dụng + âm báo (Web Audio, tắt được), số tin chưa đọc trên **tiêu đề tab** `(3) KhoaChat`. Tab đang ẩn → **Notification API** của trình duyệt. Đã đóng tab → **Web Push** (service worker `sw.js` + VAPID, thư viện `web-push`): server chỉ đẩy tới người **không còn kết nối** để tránh báo trùng. Bấm thông báo → mở đúng kênh & tin. |
 | Mức thông báo từng kênh | Biểu tượng 🔔 trên đầu kênh: *Mặc định* (tin riêng & thông báo: mọi tin; lớp học phần: khi bị nhắc tên), *Tất cả tin nhắn*, *Chỉ khi được nhắc tên*, *Tắt*. Bật/tắt Web Push và âm thanh ở nút chuông cạnh tên mình (góc dưới sidebar). |
 | **Trang quản trị** (ADMIN) | Sidebar → *Trang quản trị*. **Tổng quan**: số người dùng, đang online, tin nhắn, tệp, biểu đồ tin nhắn 7 ngày, kênh sôi nổi nhất. **Người dùng**: tìm / lọc vai trò / trạng thái, phân trang, tạo mới (mật khẩu tự sinh hiển thị 1 lần), sửa, đổi vai trò, **khoá / mở khoá** (bị khoá → đăng xuất ngay trên mọi thiết bị), đặt lại mật khẩu, **nhập CSV** (`email,họ tên,MSSV`, có thể thêm luôn vào một lớp). **Kênh**: tạo lớp học phần (bắt buộc mã HP) / kênh thông báo, chọn GV phụ trách, sửa, **lưu trữ / khôi phục**, xoá; quản lý thành viên (thêm từng người, **thêm hàng loạt bằng email/MSSV**, đổi vai trò trong kênh, xoá). |
 | Giảng viên | Sidebar → *Quản lý lớp học phần*: chỉ thấy và quản lý thành viên các lớp mình phụ trách (cũng mở được từ tab *Thành viên* của kênh). |
-| **Xác nhận đã đọc thông báo** (điểm cộng) | Tin trong kênh thông báo có nút **"Tôi đã đọc"** cho sinh viên. Người đăng / GV thấy "x/N đã xác nhận" → bấm xem danh sách **đã xác nhận / chưa xác nhận** (phân biệt "đã xem nhưng chưa xác nhận"). |
+| **Theo dõi đã xem thông báo** | Hệ thống tự động ghi nhận đã đọc khi xem tin (dựa trên `lastReadSeq >= seq`). Người đăng / GV bấm vào thông báo xem danh sách **đã xem / chưa xem** chi tiết. |
 
 ### Ảnh chụp màn hình (Milestone 2)
 
