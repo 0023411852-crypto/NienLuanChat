@@ -168,15 +168,17 @@ async function run() {
     assert(receiverGotMsg, '9. Thành viên khác trong kênh nhận được tin nhắn realtime (message:new)');
 
     // 10. Chống gửi trùng clientId (Idempotency)
-    // Bước 10a: Đếm số bản ghi Message trong kênh TRƯỚC khi gửi trùng
-    const countBefore = await (async () => {
+    // Bước 10a: Đếm chính xác số bản ghi trong DB qua endpoint /message-count
+    const fetchCount = async () => {
       const r = await fetch(
-        `${BASE_URL}/api/channels/${classChannel.id}/messages?limit=200`,
+        `${BASE_URL}/api/channels/${classChannel.id}/message-count`,
         { headers: { Authorization: `Bearer ${authSv1.token}` } }
       );
-      const d = (await r.json()) as { messages: any[]; total?: number };
-      return d.total ?? d.messages?.length ?? 0;
-    })();
+      const d = (await r.json()) as { total: number };
+      return d.total;
+    };
+
+    const countBefore = await fetchCount();
 
     // Bước 10b: Gửi lại cùng clientId1
     const duplicateAck = await emitWithAck(s1, 'message:send', {
@@ -185,23 +187,16 @@ async function run() {
       content: 'Thử gửi trùng clientId',
     });
 
-    // Bước 10c: Đếm lại sau khi gửi trùng – số phải KHÔNG tăng
-    const countAfter = await (async () => {
-      const r = await fetch(
-        `${BASE_URL}/api/channels/${classChannel.id}/messages?limit=200`,
-        { headers: { Authorization: `Bearer ${authSv1.token}` } }
-      );
-      const d = (await r.json()) as { messages: any[]; total?: number };
-      return d.total ?? d.messages?.length ?? 0;
-    })();
+    // Bước 10c: Đếm lại sau khi gửi trùng – số PHẢI bằng countBefore, không tăng
+    const countAfter = await fetchCount();
 
     assert(
       duplicateAck?.ok === true &&
       duplicateAck?.duplicate === true &&
       duplicateAck?.message?.id === ackResult?.message?.id &&
       countAfter === countBefore,
-      '10. Cơ chế chống gửi trùng tin nhắn bằng clientId (trả lại đúng ID tin cũ, không sinh bản ghi mới)',
-      `countBefore=${countBefore}, countAfter=${countAfter}, duplicateId=${duplicateAck?.message?.id}, originalId=${ackResult?.message?.id}`
+      '10. Cơ chế chống gửi trùng clientId: ID tin cũ trả về đúng, không sinh bản ghi mới trong DB',
+      `DB countBefore=${countBefore}, countAfter=${countAfter} | duplicateId=${duplicateAck?.message?.id}, originalId=${ackResult?.message?.id}`
     );
 
     // 11. Tin nhắn có thứ tự tăng dần (seq)
@@ -255,15 +250,15 @@ async function run() {
     s2.emit('message:received', { channelId: classChannel.id, maxSeq: latestSeq });
     await sleep(400);
 
-    // Xác minh: sự kiện đến đúng kênh, userId đúng, maxSeq >= seq của tin đã gửi
+    // Xác minh: sự kiện đến đúng kênh, userId đúng, maxSeq >= latestSeq (seq thực tế đã gửi lên server)
     assert(
       receivedEvent &&
       receivedEventData?.channelId === classChannel.id &&
       receivedEventData?.userId === authSv2.user.id &&
       typeof receivedEventData?.maxSeq === 'number' &&
-      receivedEventData.maxSeq >= msgSeq1,
-      '14. Cập nhật và phát sự kiện tin nhắn đã nhận (message:received) với đúng channelId, userId và maxSeq hợp lệ',
-      `channelId=${receivedEventData?.channelId}, userId=${receivedEventData?.userId}, maxSeq=${receivedEventData?.maxSeq} (cần >= ${msgSeq1})`
+      receivedEventData.maxSeq >= latestSeq,
+      '14. message:received đến đúng kênh, đúng người báo cáo, maxSeq >= seq lớn nhất hiện tại',
+      `channelId=${receivedEventData?.channelId}, userId=${receivedEventData?.userId}, maxSeq=${receivedEventData?.maxSeq} (cần >= latestSeq=${latestSeq})`
     );
 
     // 15. Đánh dấu đã đọc tin nhắn (channel:read)
@@ -274,17 +269,29 @@ async function run() {
     assert(readAck?.ok === true, '15. Gửi yêu cầu đánh dấu đã đọc thành công (channel:read)');
 
     // 16. Đồng bộ đã đọc giữa 2 tab của cùng một người dùng
-    // Lấy lastReadSeq hiện tại của SV1 TRƯỚC khi gửi channel:read
-    const memberBefore = await (async () => {
+    // seq của tin nhắn mà channel:read sẽ đánh dấu (dùng /api/channels/:id để lấy seq thực tế)
+    const targetMsg = await (async () => {
       const r = await fetch(
-        `${BASE_URL}/api/channels/${classChannel.id}/members`,
+        `${BASE_URL}/api/channels/${classChannel.id}/messages?limit=1`,
         { headers: { Authorization: `Bearer ${authSv1.token}` } }
       );
-      const d = (await r.json()) as { members: { userId: string; lastReadSeq: number }[] };
-      return d.members?.find((m) => m.userId === authSv1.user.id);
+      const d = (await r.json()) as { messages: any[] };
+      // Lấy seq của chính tin nhắn mà ta sẽ đánh dấu (ackResult.message)
+      const target = d.messages?.find((m: any) => m.id === ackResult?.message?.id);
+      return target ?? d.messages?.[0];
     })();
-    const seqBefore: number = memberBefore?.lastReadSeq ?? 0;
+    // expectedReadSeq là seq của tin nhắn được đánh dấu đọc
+    const expectedReadSeq: number = targetMsg?.seq ?? (ackResult?.message?.seq as number);
 
+    // Lấy lastReadSeq của SV1 TRƯỚC khi gửi channel:read
+    const seqBeforeRes = await fetch(
+      `${BASE_URL}/api/channels/${classChannel.id}`,
+      { headers: { Authorization: `Bearer ${authSv1.token}` } }
+    );
+    const seqBeforeData = (await seqBeforeRes.json()) as { channel: { lastReadSeq: number } };
+    const seqBefore: number = seqBeforeData.channel?.lastReadSeq ?? 0;
+
+    // Tab 2 của SV1 – kết nối và lắng nghe sự kiện channel:read
     const s1Tab2 = createSocket(authSv1.token);
     await new Promise<void>((r) => s1Tab2.on('connect', () => r()));
 
@@ -297,7 +304,7 @@ async function run() {
       }
     });
 
-    // S1 (tab 1) gửi channel:read; ack không cần kiểm tra riêng (Test 15 đã cover)
+    // Tab 1 gửi channel:read; ack riêng đã được Test 15 kiểm tra
     await emitWithAck(s1, 'channel:read', {
       channelId: classChannel.id,
       messageId: ackResult?.message?.id,
@@ -305,24 +312,24 @@ async function run() {
     await sleep(400);
     s1Tab2.close();
 
-    // Lấy lastReadSeq SAU khi gửi channel:read để xác minh không bị lùi
-    const memberAfter = await (async () => {
-      const r = await fetch(
-        `${BASE_URL}/api/channels/${classChannel.id}/members`,
-        { headers: { Authorization: `Bearer ${authSv1.token}` } }
-      );
-      const d = (await r.json()) as { members: { userId: string; lastReadSeq: number }[] };
-      return d.members?.find((m) => m.userId === authSv1.user.id);
-    })();
-    const seqAfter: number = memberAfter?.lastReadSeq ?? 0;
+    // Lấy lastReadSeq SAU khi gửi – phải >= expectedReadSeq và không được nhỏ hơn trước
+    const seqAfterRes = await fetch(
+      `${BASE_URL}/api/channels/${classChannel.id}`,
+      { headers: { Authorization: `Bearer ${authSv1.token}` } }
+    );
+    const seqAfterData = (await seqAfterRes.json()) as { channel: { lastReadSeq: number } };
+    const seqAfter: number = seqAfterData.channel?.lastReadSeq ?? 0;
 
     assert(
       syncReadTab2 &&
       syncReadData?.channelId === classChannel.id &&
+      syncReadData?.userId === authSv1.user.id &&       // đúng user thực hiện đọc
       typeof syncReadData?.seq === 'number' &&
-      seqAfter >= seqBefore,          // không được lùi seq
-      '16. Đồng bộ trạng thái đã đọc giữa 2 tab: tab 2 nhận channel:read, lastReadSeq không bị lùi',
-      `seqBefore=${seqBefore}, seqAfter=${seqAfter}, syncSeq=${syncReadData?.seq}`
+      syncReadData.seq >= expectedReadSeq &&             // cursor tiến đến đúng tin
+      seqAfter >= expectedReadSeq &&                    // DB đã cập nhật đủ xa
+      seqAfter >= seqBefore,                            // không bị lùi
+      '16. Đồng bộ 2 tab: tab 2 nhận channel:read đúng userId, seq đã tiến đến tin mục tiêu, lastReadSeq không lùi',
+      `expectedReadSeq=${expectedReadSeq} | syncSeq=${syncReadData?.seq}, syncUserId=${syncReadData?.userId} | seqBefore=${seqBefore}, seqAfter=${seqAfter}`
     );
 
     // 17. Đảm bảo trạng thái đọc không bị lùi seq (Monotonic)

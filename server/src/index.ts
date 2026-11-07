@@ -557,6 +557,21 @@ app.get('/api/channels/:id/messages', requireAuth, async (req: AuthenticatedRequ
   });
 });
 
+// Endpoint đếm tổng số tin nhắn trong kênh - dùng cho kiểm thử idempotency (Test 10)
+app.get('/api/channels/:id/message-count', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const channelId = req.params.id;
+  const ch = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (!ch) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (req.user!.role !== 'ADMIN' && ch.type !== 'ANNOUNCEMENT') {
+    const isMember = await prisma.channelMember.findUnique({
+      where: { channelId_userId: { channelId, userId: req.user!.id } },
+    });
+    if (!isMember) return res.status(403).json({ error: 'Không có quyền truy cập kênh này' });
+  }
+  const total = await prisma.message.count({ where: { channelId } });
+  res.json({ channelId, total });
+});
+
 app.get('/api/channels/:id/pins', requireAuth, async (req, res) => {
   const channelId = req.params.id;
   const [pins, members] = await Promise.all([
