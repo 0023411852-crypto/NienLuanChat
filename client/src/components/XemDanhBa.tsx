@@ -1,10 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useChat } from '../state/ChatContext';
-import { useCall } from '../state/CallContext';
 import { roleLabel } from '../lib/format';
 import type { FriendUser } from '../types';
 import AnhDaiDien from './AnhDaiDien';
-import { PhoneIcon, SearchIcon, ShieldIcon, UsersIcon, XIcon } from './BieuTuong';
+import { SearchIcon, ShieldIcon, UsersIcon, XIcon } from './BieuTuong';
 
 interface XemDanhBaProps {
   onOpenDirect: (userId: string) => void;
@@ -14,8 +13,6 @@ type RoleCategory = 'ALL' | 'STUDENT' | 'LECTURER' | 'ADMIN';
 
 export default function XemDanhBa({ onOpenDirect }: XemDanhBaProps) {
   const { state, friends } = useChat();
-  const { startCall } = useCall();
-
   const [roleFilter, setRoleFilter] = useState<RoleCategory>('ALL');
   const [keyword, setKeyword] = useState('');
 
@@ -315,14 +312,6 @@ export default function XemDanhBa({ onOpenDirect }: XemDanhBaProps) {
                       className="flex-1 rounded-xl bg-sky-600 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 transition text-center"
                     >
                       Nhắn tin
-                    </button>
-                    <button
-                      onClick={() => startCall(f)}
-                      title={`Gọi thoại cho ${f.name}`}
-                      className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60 transition"
-                    >
-                      <PhoneIcon className="h-3.5 w-3.5" />
-                      <span>Gọi</span>
                     </button>
                   </div>
                 </div>

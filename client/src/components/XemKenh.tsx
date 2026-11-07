@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useChat } from '../state/ChatContext';
-import { useCall } from '../state/CallContext';
 import { useToast } from '../state/toast';
 import { channelTitle, directPeer, fmtShort, roleLabel } from '../lib/format';
-import { parseCallLog, parseContactCard, type Channel, type Message, type UiMessage } from '../types';
+import { parseContactCard, type Channel, type Message, type UiMessage } from '../types';
 import AnhDaiDien from './AnhDaiDien';
 import KhungSoanTin, { type KhungSoanTinHandle } from './KhungSoanTin';
 import DanhSachTinNhan from './DanhSachTinNhan';
@@ -13,7 +12,7 @@ import MenuThongBao from './MenuThongBao';
 import Modal, { btn } from './ui/HopThoai';
 import ModalSuaKenh from './ModalSuaKenh';
 import ChinhSuaAnhKenh from './ChinhSuaAnhKenh';
-import { FolderIcon, HashIcon, MegaphoneIcon, PhoneIcon, PinIcon, SearchIcon, UploadIcon, UsersIcon, PencilIcon } from './BieuTuong';
+import { FolderIcon, HashIcon, MegaphoneIcon, PinIcon, SearchIcon, UploadIcon, UsersIcon, PencilIcon } from './BieuTuong';
 
 function PinnedBar({ channel, onOpen }: { channel: Channel; onOpen: () => void }) {
   const { state, loadPins, jumpTo } = useChat();
@@ -29,9 +28,7 @@ function PinnedBar({ channel, onOpen }: { channel: Channel; onOpen: () => void }
       <button onClick={() => jumpTo(channel.id, p.id)} className="min-w-0 flex-1 text-left" title="Đi tới tin đã ghim">
         <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Tin đã ghim · {p.sender.name}</p>
         <p className="truncate text-xs text-slate-600 dark:text-slate-300">
-          {parseCallLog(p.content)
-            ? `📞 [Cuộc gọi] ${parseCallLog(p.content)?.status === 'ended' ? 'Đã kết thúc' : 'Cuộc gọi nhỡ'}`
-            : parseContactCard(p.content)
+          {parseContactCard(p.content)
             ? `📇 [Danh thiếp] ${parseContactCard(p.content)?.name}`
             : p.content || (p.attachments.length ? `📎 ${p.attachments[0].filename}` : '')}
         </p>
@@ -49,7 +46,6 @@ export default function XemKenh({
   channel, panel, onPanel, onSearch,
 }: { channel: Channel; panel: PanelTab | null; onPanel: (t: PanelTab | null) => void; onSearch: (channelId?: string) => void }) {
   const { state, me, loadHistory, markRead, editMessage, deleteMessage, togglePin, jumpTo, retry, discard } = useChat();
-  const { startCall } = useCall();
   const toast = useToast();
   const cm = state.messages[channel.id];
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -176,16 +172,6 @@ export default function XemKenh({
             </p>
           </div>
           <div className="flex items-center gap-0.5">
-            {peer && (
-              <button
-                onClick={() => startCall(peer, channel.id)}
-                title={`Gọi thoại cho ${peer.name}`}
-                className={headBtn(false)}
-                data-call-btn
-              >
-                <PhoneIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              </button>
-            )}
             <button onClick={() => onSearch(channel.id)} title="Tìm trong kênh này" className={headBtn(false)}><SearchIcon className="h-5 w-5" /></button>
             <button onClick={() => toggle('pins')} title="Tin đã ghim" className={headBtn(panel === 'pins')} data-open-pins>
               <PinIcon className="h-5 w-5" />
@@ -251,9 +237,7 @@ export default function XemKenh({
         >
           <p className="text-sm text-slate-600">Tin nhắn sẽ bị xoá với mọi người trong kênh. Không thể hoàn tác.</p>
           <p className="mt-3 line-clamp-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            {parseCallLog(confirmDel.content)
-              ? `📞 [Cuộc gọi] ${parseCallLog(confirmDel.content)?.status === 'ended' ? 'Đã kết thúc' : 'Cuộc gọi nhỡ'}`
-              : parseContactCard(confirmDel.content)
+            {parseContactCard(confirmDel.content)
               ? `📇 [Danh thiếp] ${parseContactCard(confirmDel.content)?.name}`
               : confirmDel.content || '📎 Tệp đính kèm'}
           </p>

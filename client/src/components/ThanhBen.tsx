@@ -3,7 +3,7 @@ import { useChat } from '../state/ChatContext';
 import { useToast } from '../state/toast';
 import { channelTitle, directPeer, fmtShort, roleLabel } from '../lib/format';
 import { disablePush, enableNotifications, hasPushSubscription, notifySupported, playSound, soundPref } from '../lib/notify';
-import { parseCallLog, parseContactCard, type Channel } from '../types';
+import { parseContactCard, type Channel } from '../types';
 import AnhDaiDien from './AnhDaiDien';
 import {
   BellIcon,
@@ -34,16 +34,6 @@ function preview(c: Channel) {
   if (m.content) {
     const card = parseContactCard(m.content);
     if (card) return `📇 [Danh thiếp] ${card.name}`;
-    const call = parseCallLog(m.content);
-    if (call) {
-      if (call.status === 'ended') {
-        const d = call.duration || 0;
-        return `📞 Cuộc gọi thoại (${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')})`;
-      }
-      if (call.status === 'missed') return '📞 Cuộc gọi nhỡ';
-      if (call.status === 'declined') return '📞 Cuộc gọi bị từ chối';
-      return '📞 Cuộc gọi đã huỷ';
-    }
     return m.content;
   }
   if (m.attachments?.length) return m.attachments.every((a) => a.isImage) ? '[Ảnh]' : `[Tệp] ${m.attachments[0].filename}`;

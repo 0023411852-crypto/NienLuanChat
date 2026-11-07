@@ -6,8 +6,6 @@ import TrangDangNhap from './components/TrangDangNhap';
 import BoCucChat from './components/BoCucChat';
 import ThongBaoNhanh from './components/ThongBaoNhanh';
 import { ChatProvider } from './state/ChatContext';
-import { CallProvider } from './state/CallContext';
-import ModalCuocGoi from './components/ModalCuocGoi';
 import { ToastProvider } from './state/toast';
 
 const USER_KEY = 'khoachat.user';
@@ -71,10 +69,7 @@ export default function App() {
     <ToastProvider>
       {me ? (
         <ChatProvider key={me.id} me={me} onUnauthorized={clearSession}>
-          <CallProvider>
-            <BoCucChat onLogout={logout} />
-            <ModalCuocGoi />
-          </CallProvider>
+          <BoCucChat onLogout={logout} />
         </ChatProvider>
       ) : (
         <TrangDangNhap onLogin={onLogin} />

@@ -41,7 +41,7 @@ async function login(email: string, password = 'SinhVien@123') {
   return { token: res.data.token as string, user: res.data.user as any };
 }
 
-async function run() {
+  async function run() {
   console.log(`\n======================================================`);
   console.log(`🚀 BẮT ĐẦU KIỂM THỬ TÍNH NĂNG (MILESTONE 2) — 92 TÌNH HUỐNG`);
   console.log(`🎯 Server: ${BASE_URL}`);
@@ -496,7 +496,7 @@ async function run() {
     });
     assert(disbandRes.ok, '80. Chủ kênh cộng đồng giải tán nhóm vĩnh viễn');
 
-    // Tính năng mở rộng: Cuộc gọi, Preset SVG, Đổi Avatar
+    // Tính năng mở rộng: Preset SVG, Đổi Avatar
     console.log('\n--- KHỐI 8: Tính năng Mở rộng & Đa phương tiện (Cases 81-92) ---');
     const svgPreset = await request('/api/channel-avatars/presets/book.svg');
     assert(svgPreset.ok, '81. Trả về biểu tượng đại diện môn học SVG tĩnh (/presets/book.svg)');

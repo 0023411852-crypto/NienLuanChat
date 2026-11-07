@@ -2129,67 +2129,6 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 // 3. SOCKET.IO REALTIME
 // ==========================================
 const onlineUsers = new Set<string>();
-const ongoingCalls = new Map<string, { callerId: string; toUserId: string; channelId?: string; startTime?: number; connected: boolean }>();
-
-async function recordCallLog(callerId: string, toUserId: string, channelId: string | undefined, status: string, duration: number = 0) {
-  try {
-    let targetChannelId = channelId;
-    if (!targetChannelId) {
-      const directCh = await prisma.channel.findFirst({
-        where: {
-          type: 'DIRECT',
-          AND: [
-            { members: { some: { userId: callerId } } },
-            { members: { some: { userId: toUserId } } },
-          ],
-        },
-      });
-      targetChannelId = directCh?.id;
-    }
-    if (!targetChannelId) return;
-
-    const content = `__call__:${JSON.stringify({ type: 'voice', status, duration })}`;
-    const clientId = `call-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-    const msg = await prisma.message.create({
-      data: {
-        clientId,
-        channelId: targetChannelId,
-        senderId: callerId,
-        type: 'SYSTEM',
-        content,
-      },
-      include: {
-        sender: true,
-        attachments: true,
-        replyTo: true,
-        mentions: { include: { user: true } },
-      },
-    });
-
-    // Cập nhật đã đọc cho người gọi
-    await prisma.channelMember.updateMany({
-      where: { channelId: targetChannelId, userId: callerId },
-      data: { lastReadSeq: msg.seq, lastReadMessageId: msg.id, lastReadAt: new Date() },
-    });
-
-    const formatted = {
-      ...formatMessage(msg),
-      ackUserIds: [callerId],
-    };
-    io.to(`channel:${targetChannelId}`).emit('message:new', formatted);
-
-    // Đồng bộ trạng thái đã đọc cho người gọi ở mọi phiên đăng nhập
-    io.to(`user:${callerId}`).emit('channel:read', {
-      channelId: targetChannelId,
-      messageId: msg.id,
-      seq: msg.seq,
-      at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('Lỗi lưu lịch sử cuộc gọi:', err);
-  }
-}
 
 io.use((socket: Socket, next) => {
   const token = socket.handshake.auth.token;
@@ -2550,115 +2489,9 @@ io.on('connection', async (socket: Socket) => {
     });
   });
 
-  // 8. Cuộc gọi thoại WebRTC 1 - 1 (Audio Call) kèm tự động lưu tin nhắn lịch sử cuộc gọi
-  socket.on('call:invite', async ({ toUserId, channelId, offer }) => {
-    if (!toUserId || toUserId === user.id) return;
-    const key = [user.id, toUserId].sort().join(':');
-    const existing = ongoingCalls.get(key);
-    // Nếu chưa có cuộc gọi hoặc cuộc gọi trước đã hoàn tất thì khởi tạo mới
-    if (!existing || existing.connected) {
-      ongoingCalls.set(key, { callerId: user.id, toUserId, channelId, connected: false });
-    }
-
-    const callerInfo = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { id: true, name: true, avatar: true, role: true },
-    });
-
-    io.to(`user:${toUserId}`).emit('call:incoming', {
-      caller: {
-        id: user.id,
-        name: callerInfo?.name || user.name,
-        avatar: callerInfo?.avatar || user.avatar || null,
-        role: callerInfo?.role || user.role,
-      },
-      channelId,
-      offer,
-    });
-  });
-
-  socket.on('call:answer', ({ toUserId, answer }) => {
-    const key = [user.id, toUserId].sort().join(':');
-    const call = ongoingCalls.get(key);
-    if (call) {
-      call.connected = true;
-      call.startTime = Date.now();
-    }
-
-    io.to(`user:${toUserId}`).emit('call:answered', {
-      fromUserId: user.id,
-      answer,
-    });
-
-    // Đồng bộ đóng chuông cuộc gọi đến cho các phiên đăng nhập khác của người nghe
-    socket.to(`user:${user.id}`).emit('call:dismissed', {
-      peerId: toUserId,
-      reason: 'answered_elsewhere',
-    });
-  });
-
-  socket.on('call:candidate', ({ toUserId, candidate }) => {
-    io.to(`user:${toUserId}`).emit('call:candidate', {
-      fromUserId: user.id,
-      candidate,
-    });
-  });
-
-  socket.on('call:reject', async ({ toUserId, reason }) => {
-    const key = [user.id, toUserId].sort().join(':');
-    const call = ongoingCalls.get(key);
-    ongoingCalls.delete(key);
-
-    const callerId = call?.callerId || toUserId;
-    const recipientId = call?.toUserId || user.id;
-    const chId = call?.channelId;
-
-    // Báo từ chối cho người gọi (tất cả các phiên đăng nhập của người gọi)
-    io.to(`user:${toUserId}`).emit('call:rejected', {
-      fromUserId: user.id,
-      reason: reason || 'declined',
-    });
-
-    // Đồng bộ tắt chuông/đóng cuộc gọi đến cho tất cả các tab/phiên đăng nhập khác của chính người từ chối
-    socket.to(`user:${user.id}`).emit('call:dismissed', {
-      peerId: toUserId,
-      reason: 'rejected_elsewhere',
-    });
-
-    await recordCallLog(callerId, recipientId, chId, 'declined', 0);
-  });
-
-  socket.on('call:end', async ({ toUserId, duration: clientDuration }) => {
-    const key = [user.id, toUserId].sort().join(':');
-    const call = ongoingCalls.get(key);
-    ongoingCalls.delete(key);
-
-    io.to(`user:${toUserId}`).emit('call:ended', {
-      fromUserId: user.id,
-    });
-
-    // Đồng bộ kết thúc cho các phiên đăng nhập khác của người bấm kết thúc
-    socket.to(`user:${user.id}`).emit('call:dismissed', {
-      peerId: toUserId,
-      reason: 'ended_elsewhere',
-    });
-
-    if (call) {
-      if (call.connected) {
-        const d = clientDuration || (call.startTime ? Math.max(1, Math.round((Date.now() - call.startTime) / 1000)) : 1);
-        await recordCallLog(call.callerId, call.toUserId, call.channelId, 'ended', d);
-      } else {
-        await recordCallLog(call.callerId, call.toUserId, call.channelId, 'cancelled', 0);
-      }
-    } else if (clientDuration && clientDuration > 0) {
-      await recordCallLog(user.id, toUserId, undefined, 'ended', clientDuration);
-    }
-  });
-
   socket.on('disconnect', async () => {
     onlineUsers.delete(user.id);
     io.emit('presence', { userId: user.id, online: false });
-    io.emit('call:peer_disconnected', { userId: user.id });
 
     // Cập nhật thời điểm trực tuyến lần cuối (last seen)
     await prisma.user.update({
@@ -2666,22 +2499,6 @@ io.on('connection', async (socket: Socket) => {
       data: { lastSeenAt: new Date() },
     }).catch(() => {});
 
-    // Tự động kết thúc và lưu log nếu đang trong cuộc gọi dở dang
-    for (const [key, call] of ongoingCalls.entries()) {
-      if (call.callerId === user.id || call.toUserId === user.id) {
-        ongoingCalls.delete(key);
-        const otherUserId = call.callerId === user.id ? call.toUserId : call.callerId;
-        io.to(`user:${otherUserId}`).emit('call:ended', { fromUserId: user.id });
-        io.to(`user:${user.id}`).emit('call:dismissed', { peerId: otherUserId, reason: 'peer_disconnected' });
-
-        if (call.connected && call.startTime) {
-          const d = Math.max(1, Math.round((Date.now() - call.startTime) / 1000));
-          await recordCallLog(call.callerId, call.toUserId, call.channelId, 'ended', d);
-        } else {
-          await recordCallLog(call.callerId, call.toUserId, call.channelId, 'missed', 0);
-        }
-      }
-    }
   });
 });
 

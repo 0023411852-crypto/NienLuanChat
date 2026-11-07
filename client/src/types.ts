@@ -188,26 +188,6 @@ export function parseContactCard(content?: string | null): ContactCardData | nul
   return null;
 }
 
-export interface CallLogData {
-  type: 'voice';
-  status: 'ended' | 'missed' | 'declined' | 'cancelled';
-  duration?: number;
-}
-
-export function parseCallLog(content?: string | null): CallLogData | null {
-  if (!content || !content.startsWith('__call__:')) return null;
-  try {
-    const raw = JSON.parse(content.slice('__call__:'.length));
-    if (raw && typeof raw === 'object' && raw.status) {
-      return raw as CallLogData;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-
 export interface FileResult extends Attachment {
   uploader: { id: string; name: string };
   channel: { id: string; name: string; type: ChannelType; courseCode: string | null };

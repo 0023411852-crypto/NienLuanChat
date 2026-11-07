@@ -1,13 +1,12 @@
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { fmtTime, roleLabel } from '../lib/format';
-import { parseCallLog, parseContactCard, type CallLogData, type Channel, type ContactCardData, type UiMessage } from '../types';
+import { parseContactCard, type Channel, type ContactCardData, type UiMessage } from '../types';
 import { useChat } from '../state/ChatContext';
-import { useCall } from '../state/CallContext';
 import AnhDaiDien from './AnhDaiDien';
 import TepDinhKem from './TepDinhKem';
 import VanBanDinhDang from './VanBanDinhDang';
 import {
-  AlertIcon, CheckIcon, ClockIcon, ContactCardIcon, DoubleCheckIcon, EditIcon, PhoneIcon, PhoneOffIcon, PinIcon, PinOutlineIcon, ReplyIcon, TrashIcon, UsersIcon,
+  AlertIcon, CheckIcon, ClockIcon, ContactCardIcon, DoubleCheckIcon, EditIcon, PinIcon, PinOutlineIcon, ReplyIcon, TrashIcon, UsersIcon,
 } from './BieuTuong';
 
 export interface MessageActions {
@@ -143,109 +142,6 @@ function ContactCardBubble({
   );
 }
 
-function CallLogBubble({
-  call,
-  mine,
-  onCallBack,
-  deleted,
-}: {
-  call: CallLogData;
-  mine: boolean;
-  onCallBack?: () => void;
-  deleted: boolean;
-}) {
-  if (deleted) {
-    return (
-      <div className={`whitespace-pre-wrap break-words chat-bubble rounded-2xl px-4 py-2 text-sm leading-relaxed ${mine ? 'bubble-mine bg-sky-600 text-white rounded-tr-md' : 'bg-white text-slate-800 ring-1 ring-slate-100 shadow-sm rounded-tl-md dark:bg-[#2b2d31] dark:text-slate-200 dark:ring-slate-700/60'}`}>
-        <em className="opacity-60">Tin nhắn đã bị thu hồi</em>
-      </div>
-    );
-  }
-
-  const isSuccess = call.status === 'ended';
-  const isMissed = call.status === 'missed';
-  const isDeclined = call.status === 'declined';
-  const isCancelled = call.status === 'cancelled';
-
-  const durationStr = call.duration
-    ? `${Math.floor(call.duration / 60)}:${String(call.duration % 60).padStart(2, '0')}`
-    : '00:00';
-
-  let title = 'Cuộc gọi thoại';
-  let subtitle = `Thời gian: ${durationStr}`;
-  let isDanger = false;
-
-  if (isSuccess) {
-    title = mine ? 'Cuộc gọi đi' : 'Cuộc gọi đến';
-    subtitle = `Thời lượng: ${durationStr}`;
-  } else if (isMissed) {
-    if (mine) {
-      title = 'Cuộc gọi đi bị nhỡ';
-      subtitle = 'Đối phương không trả lời';
-    } else {
-      title = 'Cuộc gọi nhỡ';
-      subtitle = 'Bấm để gọi lại';
-      isDanger = true;
-    }
-  } else if (isDeclined) {
-    title = mine ? 'Cuộc gọi bị từ chối' : 'Đã từ chối cuộc gọi';
-    subtitle = mine ? 'Đối phương bận' : 'Cuộc gọi đến';
-  } else if (isCancelled) {
-    title = mine ? 'Đã huỷ cuộc gọi' : 'Cuộc gọi nhỡ';
-    subtitle = mine ? 'Đã huỷ' : 'Bấm để gọi lại';
-    if (!mine) isDanger = true;
-  }
-
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-2xl px-4 py-2.5 shadow-sm border transition min-w-[220px] max-w-xs ${
-        mine
-          ? 'bg-sky-600 text-white border-sky-500 rounded-tr-md'
-          : 'bg-white text-slate-800 border-slate-200 dark:bg-[#2b2d31] dark:border-slate-700 dark:text-slate-100 rounded-tl-md'
-      }`}
-    >
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          isSuccess
-            ? mine ? 'bg-sky-500 text-white' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400'
-            : isDanger
-            ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
-            : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'
-        }`}
-      >
-        {isSuccess ? (
-          <PhoneIcon className="h-4 w-4" />
-        ) : (
-          <PhoneOffIcon className="h-4 w-4" />
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className={`text-xs font-bold truncate ${isDanger && !mine ? 'text-rose-600 dark:text-rose-400' : ''}`}>
-          {title}
-        </p>
-        <p className={`text-[11px] truncate mt-0.5 ${mine ? 'text-sky-100' : 'text-slate-500 dark:text-slate-400'}`}>
-          {subtitle}
-        </p>
-      </div>
-
-      {onCallBack && (
-        <button
-          onClick={onCallBack}
-          title="Gọi lại"
-          className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-            mine
-              ? 'bg-white/20 text-white hover:bg-white/30'
-              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300'
-          }`}
-        >
-          Gọi lại
-        </button>
-      )}
-    </div>
-  );
-}
-
 function TinNhanItem({
   m, mine, grouped, online, channel, meId, isStaff, mentioned, memberCount, actions, tokens,
 }: {
@@ -259,9 +155,6 @@ function TinNhanItem({
   const deleted = !!m.deletedAt;
   const sent = m.status === 'sent';
   const contactCard = !deleted ? parseContactCard(m.content) : null;
-  const callLog = !deleted ? parseCallLog(m.content) : null;
-  const { startCall } = useCall();
-  const peer = channel.type === 'DIRECT' ? (channel.members || []).find((mb) => mb.id !== meId) : undefined;
 
   useEffect(() => {
     if (editing) {
@@ -377,13 +270,6 @@ function TinNhanItem({
                 pinned={m.pinned}
                 deleted={deleted}
               />
-            ) : callLog ? (
-              <CallLogBubble
-                call={callLog}
-                mine={mine}
-                onCallBack={peer ? () => startCall(peer, channel.id) : undefined}
-                deleted={deleted}
-              />
             ) : (
               <div className={`whitespace-pre-wrap break-words chat-bubble rounded-2xl px-4 py-2 text-sm leading-relaxed ${bubble} ${mine ? 'rounded-tr-md' : 'rounded-tl-md'}`}>
                 {m.pinned && !deleted && (
@@ -440,7 +326,7 @@ function TinNhanItem({
               {m.pinned ? <PinIcon className="h-3.5 w-3.5" /> : <PinOutlineIcon className="h-3.5 w-3.5" />}
             </button>
           )}
-          {mine && !contactCard && !callLog && (
+          {mine && !contactCard && (
             <button
               onClick={() => { setDraft(m.content); setEditing(true); }}
               className="rounded p-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"

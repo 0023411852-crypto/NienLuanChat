@@ -9,7 +9,7 @@ import { ACCEPT, checkFile, fmtSize, isImageName } from '../lib/files';
 import { channelTitle, roleLabel } from '../lib/format';
 import { unaccent } from '../lib/text';
 import { uuid } from '../lib/uuid';
-import { parseCallLog, parseContactCard, type Attachment, type Channel, type ContactCardData, type Message } from '../types';
+import { parseContactCard, type Attachment, type Channel, type ContactCardData, type Message } from '../types';
 import AnhDaiDien from './AnhDaiDien';
 import { FileIconBadge } from './TepDinhKem';
 import ModalTheDanhBa from './ModalTheDanhBa';
@@ -302,9 +302,7 @@ const KhungSoanTin = forwardRef<KhungSoanTinHandle, { channel: Channel; replyTo:
               <div className="min-w-0 flex-1">
                 <span>Đang trả lời <b>{replyTo.senderId === me.id ? 'chính bạn' : replyTo.sender.name}</b></span>
                 <p className="truncate text-slate-400 dark:text-slate-500">
-                  {parseCallLog(replyTo.content)
-                    ? `📞 [Cuộc gọi] ${parseCallLog(replyTo.content)?.status === 'ended' ? 'Đã kết thúc' : 'Cuộc gọi nhỡ'}`
-                    : parseContactCard(replyTo.content)
+                  {parseContactCard(replyTo.content)
                     ? `📇 [Danh thiếp] ${parseContactCard(replyTo.content)?.name}`
                     : replyTo.content || (replyTo.attachments.length ? '📎 Tệp đính kèm' : '')}
                 </p>

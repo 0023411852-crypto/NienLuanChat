@@ -5,7 +5,7 @@ import { cache, outbox } from '../lib/outbox';
 import { uuid } from '../lib/uuid';
 import { channelTitle } from '../lib/format';
 import { playSound, shouldNotify, showBrowserNotification } from '../lib/notify';
-import { parseCallLog, parseContactCard, type Attachment, type Channel, type FriendRequestItem, type FriendUser, type Message, type NotifyLevel, type OutboxFile, type OutboxItem, type ReadState, type User } from '../types';
+import { parseContactCard, type Attachment, type Channel, type FriendRequestItem, type FriendUser, type Message, type NotifyLevel, type OutboxFile, type OutboxItem, type ReadState, type User } from '../types';
 import { initialState, mentionsMe, reducer, type ChatState } from './reducer';
 import { useToast } from './toast';
 
@@ -242,11 +242,6 @@ export function ChatProvider({ me, onUnauthorized, children }: { me: User; onUna
       const visible = document.visibilityState === 'visible';
       if (visible && st.activeId === m.channelId && document.hasFocus()) return;
 
-      const call = parseCallLog(m.content);
-      // Nếu là cuộc gọi đã kết thúc hoặc từ chối, không hiện toast tin nhắn trùng lặp
-      if (call) {
-        if (call.status === 'ended' || call.status === 'declined') return;
-      }
       const card = parseContactCard(m.content);
 
       const title = mentioned
@@ -258,10 +253,7 @@ export function ChatProvider({ me, onUnauthorized, children }: { me: User; onUna
       let body = m.content || '';
       let badge = ch.type === 'ANNOUNCEMENT' ? 'Thông báo' : ch.type === 'COMMUNITY' ? 'Cộng đồng' : mentioned ? '@ Nhắc tên' : ch.type === 'CLASS' ? ch.courseCode ?? undefined : undefined;
 
-      if (call) {
-        body = '📞 Cuộc gọi nhỡ';
-        badge = 'Cuộc gọi nhỡ';
-      } else if (card) {
+      if (card) {
         body = `📇 [Danh thiếp] ${card.name}`;
         badge = 'Danh thiếp';
       } else if (!body && m.attachments?.length) {
