@@ -1,19 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 import { prisma } from './prisma';
 
-const envSecret = process.env.JWT_SECRET;
-if (!envSecret) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('FATAL SECURITY ERROR: JWT_SECRET environment variable is required in production!');
-  }
-  console.warn('\x1b[33m%s\x1b[0m', '⚠️  CẢNH BÁO BẢO MẬT: Chưa cấu hình biến môi trường JWT_SECRET trong file .env! Đang dùng secret tạm cho môi trường phát triển.');
-} else if (envSecret.length < 16 && process.env.NODE_ENV === 'production') {
-  throw new Error('FATAL SECURITY ERROR: JWT_SECRET quá ngắn (yêu cầu tối thiểu 16 ký tự) trong môi trường production!');
-}
+dotenv.config();
 
-const JWT_SECRET = envSecret || 'khoachat-secret-nienluan-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be configured and at least 32 characters');
+}
 
 export interface AuthUser {
   id: string;

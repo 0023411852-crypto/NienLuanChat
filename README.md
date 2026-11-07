@@ -241,12 +241,11 @@ khoachat/
 
 > **Lưu ý kiến trúc đã tối ưu:** Theo góp ý của Thầy hướng dẫn, hệ thống **không cần bảng `MessageAck` riêng biệt** mà sử dụng trực tiếp điều kiện `ChannelMember.lastReadSeq >= Message.seq`. Nhờ đó, khi sinh viên mở xem kênh, hệ thống tự động ghi nhận là đã đọc thông báo, không yêu cầu sinh viên phải bấm nút thủ công và tránh tạo thêm bảng dữ liệu thừa.
 
-Tìm kiếm nội dung: Tìm kiếm không phân biệt hoa thường và không phân biệt dấu qua API `/api/search` và `/api/search/messages`:
-
-```sql
-SELECT * FROM "Message"
-WHERE "searchVector" @@ to_tsquery('simple', 'lich:* & thi:*');   -- từ khoá đã được bỏ dấu ở server, hỗ trợ gõ dở (tiền tố)
-```
+### Tìm kiếm tin nhắn & tệp tin
+Hệ thống cung cấp API tìm kiếm `/api/search`, `/api/search/messages` và `/api/search/files`:
+- Tìm kiếm theo nội dung tin nhắn (`content`) không phân biệt hoa thường (`mode: 'insensitive'`).
+- Tự động lọc phạm vi an toàn: Sinh viên/Giảng viên chỉ tìm thấy tin nhắn và tài liệu trong các kênh mà mình là thành viên (`where: { channelId: { in: myChannelIds } }`).
+- Hỗ trợ lọc nâng cao theo kênh (`channelId`), theo người gửi (`senderId`) và lọc tin có tệp đính kèm (`hasFile: true`).
 
 ### Sự kiện Socket.IO
 
