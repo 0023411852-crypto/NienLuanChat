@@ -195,7 +195,7 @@ khoachat/
 │   ├── .env.example
 │   ├── uploads/                # tệp đính kèm (không public, không đưa lên git)
 │   ├── prisma/
-│   │   ├── schema.prisma       # User, Channel, ChannelMember, Message, Attachment, Mention, MessageAck, PushSubscription
+│   │   ├── schema.prisma       # 7 models: User, Channel, ChannelMember, Message, Attachment, Mention, PushSubscription
 │   │   ├── migrations/         # init + add_fulltext_search (tsvector, GIN, unaccent) + milestone2_features
 │   │   ├── seed-assets/        # ảnh / PDF / CSV mẫu
 │   │   └── seed.ts             # dữ liệu mẫu
@@ -229,19 +229,19 @@ khoachat/
 
 ## Thiết kế chính
 
-### Cơ sở dữ liệu (Prisma)
+### Cơ sở dữ liệu (Prisma - 7 Models)
 
-- `User` — `role` (STUDENT / LECTURER / ADMIN), `email`, `name`, `passwordHash`, `avatar`, `studentCode`, `locked`, `lastSeenAt`.
-- `Channel` — `type` (CLASS / ANNOUNCEMENT / DIRECT), `name`, `courseCode`, `description`, `directKey` (duy nhất cho mỗi cặp người dùng DM), `archived`.
-- `ChannelMember` — `role` (OWNER / MODERATOR / MEMBER), `lastReadMessageId`, `lastReadAt`, `notifyLevel` (DEFAULT / ALL / MENTIONS / NONE).
-- `Message` — `seq` (số tăng dần, dùng để phân trang & tải bù), `clientId` (unique, chống trùng), `content`, `type`, `replyToId`,
-  `pinned`/`pinnedAt`/`pinnedById`, `createdAt`, `editedAt`, `deletedAt`, `searchVector` (tsvector tự sinh).
-- `Attachment` — `channelId` (để kiểm quyền), `messageId` (null khi mới tải lên, chưa gửi), `uploaderId`, `filename`, `mime`, `size`, `path`.
-- `Mention` — tin nhắn ↔ người được nhắc; `Message.mentionAll` cho `@all`.
-- `MessageAck` — ai đã xác nhận đọc thông báo nào. `PushSubscription` — endpoint + khoá Web Push của từng trình duyệt.
+- `User` — `role` (STUDENT / LECTURER / ADMIN), `email`, `name`, `password` (bcrypt), `avatar`, `studentCode`, `locked`, `lastSeenAt`.
+- `Channel` — `type` (CLASS / ANNOUNCEMENT / DIRECT / COMMUNITY), `name`, `courseCode`, `description`, `archived` (DM 1-1 được truy vấn quan hệ qua `ChannelMember` không cần trường dư thừa).
+- `ChannelMember` — `role` (OWNER / MODERATOR / MEMBER), `lastReadSeq` (tiến độ đọc tự động cập nhật khi xem kênh), `lastReadMessageId`, `lastReadAt`, `notifyLevel` (DEFAULT / ALL / MENTIONS / NONE).
+- `Message` — `seq` (số tự tăng trong kênh, dùng để phân trang & tải bù), `clientId` (unique, chống gửi trùng), `content`, `type`, `replyToId`, `pinned`/`pinnedAt`/`pinnedById`, `createdAt`, `editedAt`, `deletedAt`.
+- `Attachment` — `channelId` (kiểm quyền tải tệp), `messageId`, `uploaderId`, `filename`, `mime`, `size` (tối đa 20MB), `isImage`, `path`, `url`.
+- `Mention` — tin nhắn ↔ người dùng được nhắc tên; khi nhắc `@all`, hệ thống tự động sinh liên kết mention cho toàn bộ thành viên kênh để đếm huy hiệu chính xác.
+- `PushSubscription` — `endpoint`, `p256dh`, `auth` (chuẩn VAPID) để gửi Web Push khi offline.
 
-Tìm kiếm toàn văn (migration `add_fulltext_search`): cột `searchVector` là cột *generated* từ `content`, có chỉ mục GIN,
-dùng `unaccent` để gõ không dấu vẫn tìm được, ví dụ:
+> **Lưu ý kiến trúc đã tối ưu:** Theo góp ý của Thầy hướng dẫn, hệ thống **không cần bảng `MessageAck` riêng biệt** mà sử dụng trực tiếp điều kiện `ChannelMember.lastReadSeq >= Message.seq`. Nhờ đó, khi sinh viên mở xem kênh, hệ thống tự động ghi nhận là đã đọc thông báo, không yêu cầu sinh viên phải bấm nút thủ công và tránh tạo thêm bảng dữ liệu thừa.
+
+Tìm kiếm nội dung: Tìm kiếm không phân biệt hoa thường và không phân biệt dấu qua API `/api/search` và `/api/search/messages`:
 
 ```sql
 SELECT * FROM "Message"
