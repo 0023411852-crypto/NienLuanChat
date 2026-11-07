@@ -56,10 +56,18 @@ async function checkHealth(): Promise<{ ok: boolean; service: string; pid: numbe
   }
 }
 
+/** Phân tích SERVER_URL để lấy chính xác host và port theo chuẩn giao thức */
+function parseServerEndpoint(rawUrl: string): { host: string; port: number } {
+  const parsed = new URL(rawUrl);
+  const host = parsed.hostname || 'localhost';
+  const defaultPort = parsed.protocol === 'https:' ? 443 : 80;
+  const port = parsed.port ? parseInt(parsed.port, 10) : defaultPort;
+  return { host, port };
+}
+
 /** Kiểm tra TCP port có đang được lắng nghe hay không (không phụ thuộc HTTP).
- *  Chính xác hơn fetch() vì phát hiện bất kỳ tiến trình nào đang bind port,
- *  kể cả tiến trình không phục vụ HTTP. */
-function isTcpPortInUse(port: number, host = '127.0.0.1'): Promise<boolean> {
+ *  Sử dụng đúng hostname từ SERVER_URL để tôn trọng cấu hình mạng (IPv4 / IPv6 / localhost). */
+function isTcpPortInUse(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.createConnection({ port, host });
     socket.once('connect', () => { socket.destroy(); resolve(true); });
@@ -115,13 +123,12 @@ async function main() {
     console.log(`♻️   KhoaChat đang chạy sẵn (PID ${existingHealth.pid}). Dùng lại, không spawn thêm.\n`);
     reusingExisting = true;
   } else {
-    // Fix A: dùng TCP check thay vì fetch() để phát hiện mọi tiến trình đang chiếm cổng,
-    // kể cả tiến trình không phục vụ HTTP (fetch() sẽ thất bại và tưởng cổng trống).
-    const serverPort = parseInt(new URL(SERVER_URL).port || '4001', 10);
-    const portBusy = await isTcpPortInUse(serverPort);
+    // Điểm A & B: Lấy đúng hostname và port theo protocol (80/443 hoặc port khai báo)
+    const { host: serverHost, port: serverPort } = parseServerEndpoint(SERVER_URL);
+    const portBusy = await isTcpPortInUse(serverPort, serverHost);
 
     if (portBusy) {
-      console.error(`❌  Cổng ${serverPort} đang bị chiếm bởi tiến trình KHÔNG PHẢI KhoaChat.`);
+      console.error(`❌  Cổng ${serverHost}:${serverPort} đang bị chiếm bởi tiến trình KHÔNG PHẢI KhoaChat.`);
       console.error('    Hãy dừng tiến trình đó trước rồi chạy lại npm test.');
       process.exit(1);
     }
