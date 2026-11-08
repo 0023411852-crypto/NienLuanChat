@@ -26,9 +26,11 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 4001;
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const AVATAR_DIR = path.resolve(UPLOAD_DIR, 'avatars');
+const ATTACHMENT_DIR = path.resolve(UPLOAD_DIR, 'attachments');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
+if (!fs.existsSync(ATTACHMENT_DIR)) fs.mkdirSync(ATTACHMENT_DIR, { recursive: true });
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
@@ -39,35 +41,81 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'khoachat', pid: process.pid });
 });
-// Cấu hình Multer upload
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+
+// Danh sách đuôi tệp cho phép upload ảnh đại diện (chặn .svg để chống stored XSS)
+const ALLOWED_AVATAR_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+// Allowlist đuôi tệp cho phép đính kèm trong kênh
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+  // Ảnh
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+  // Tài liệu văn phòng
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.rtf', '.md',
+  // File nén
+  '.zip', '.rar', '.7z', '.tar', '.gz',
+  // Âm thanh & Video
+  '.mp3', '.wav', '.ogg', '.mp4', '.webm', '.mov', '.mkv',
+  // Mã nguồn & dữ liệu
+  '.json', '.xml', '.sql', '.py', '.java', '.c', '.cpp', '.cs', '.js', '.ts', '.html', '.css'
+]);
+
+// Danh sách các đuôi nguy hại tuyệt đối bị cấm
+const BANNED_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.sh', '.vbs', '.msi', '.dll', '.com', '.scr', '.ps1',
+  '.pif', '.application', '.gadget', '.hta', '.cpl', '.msc', '.jar', '.reg', '.svg'
+]);
+
+// Cấu hình Multer lưu ảnh đại diện vào uploads/avatars
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const unique = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
     cb(null, unique);
   },
 });
 
-const BANNED_EXTENSIONS = new Set(['.exe', '.bat', '.cmd', '.sh', '.vbs', '.msi', '.dll', '.com', '.scr', '.ps1']);
-const upload = multer({
-  storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB theo đúng tài liệu
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (BANNED_EXTENSIONS.has(ext)) {
-      return cb(new Error('Loại tệp không được hỗ trợ vì lý do an toàn'));
+    if (!ALLOWED_AVATAR_EXTENSIONS.has(ext)) {
+      return cb(new Error('Chỉ chấp nhận ảnh đại diện định dạng JPG, PNG, WebP hoặc GIF (không cho phép SVG)'));
     }
     cb(null, true);
   },
 });
 
-function checkMagicBytes(filePath: string, ext: string): boolean {
+// Cấu hình Multer lưu tệp đính kèm vào uploads/attachments
+const attachmentStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, ATTACHMENT_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+    cb(null, unique);
+  },
+});
+
+const upload = multer({
+  storage: attachmentStorage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB theo đúng tài liệu
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (BANNED_EXTENSIONS.has(ext) || !ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) {
+      return cb(new Error('Loại tệp không được hỗ trợ hoặc bị từ chối vì lý do an toàn'));
+    }
+    cb(null, true);
+  },
+});
+
+function checkAvatarMagicBytes(filePath: string, ext: string): boolean {
   try {
     const fd = fs.openSync(filePath, 'r');
-    const buffer = Buffer.alloc(8);
-    fs.readSync(fd, buffer, 0, 8, 0);
+    const buffer = Buffer.alloc(12);
+    const bytesRead = fs.readSync(fd, buffer, 0, 12, 0);
     fs.closeSync(fd);
+    if (bytesRead < 4) return false;
 
     if (['.jpg', '.jpeg'].includes(ext)) {
       return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
@@ -78,10 +126,82 @@ function checkMagicBytes(filePath: string, ext: string): boolean {
     if (ext === '.gif') {
       return buffer.subarray(0, 3).toString() === 'GIF';
     }
+    if (ext === '.webp') {
+      return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP';
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function checkMagicBytes(filePath: string, ext: string): boolean {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(32);
+    const bytesRead = fs.readSync(fd, buffer, 0, 32, 0);
+    fs.closeSync(fd);
+    if (bytesRead < 4) return false;
+
+    // Ảnh
+    if (['.jpg', '.jpeg'].includes(ext)) {
+      return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    }
+    if (ext === '.png') {
+      return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    }
+    if (ext === '.gif') {
+      return buffer.subarray(0, 3).toString() === 'GIF';
+    }
+    if (ext === '.webp') {
+      return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP';
+    }
+    if (ext === '.bmp') {
+      return buffer[0] === 0x42 && buffer[1] === 0x4d;
+    }
+
+    // PDF
     if (ext === '.pdf') {
       return buffer.subarray(0, 4).toString() === '%PDF';
     }
-    return true; // Tài liệu văn phòng, zip, code cho phép bình thường
+
+    // ZIP, DOCX, XLSX, PPTX (chữ ký PK..)
+    if (['.zip', '.docx', '.xlsx', '.pptx'].includes(ext)) {
+      return buffer[0] === 0x50 && buffer[1] === 0x4b && (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07);
+    }
+
+    // RAR
+    if (ext === '.rar') {
+      return buffer[0] === 0x52 && buffer[1] === 0x61 && buffer[2] === 0x72 && buffer[3] === 0x21;
+    }
+
+    // 7z
+    if (ext === '.7z') {
+      return buffer[0] === 0x37 && buffer[1] === 0x7a && buffer[2] === 0xbc && buffer[3] === 0xaf && buffer[4] === 0x27 && buffer[5] === 0x1c;
+    }
+
+    // Video MP4, MOV, WEBM, MKV
+    if (['.mp4', '.mov'].includes(ext)) {
+      return buffer.subarray(4, 8).toString() === 'ftyp';
+    }
+    if (['.mkv', '.webm'].includes(ext)) {
+      return buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3;
+    }
+
+    // Âm thanh MP3
+    if (ext === '.mp3') {
+      return buffer.subarray(0, 3).toString() === 'ID3' || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0);
+    }
+
+    // Tuyệt đối không cho phép file binary giả danh text (kiểm tra không có byte null trong 32 byte đầu)
+    if (['.txt', '.csv', '.md', '.json', '.xml', '.sql', '.py', '.java', '.c', '.cpp', '.cs', '.js', '.ts', '.html', '.css'].includes(ext)) {
+      for (let i = 0; i < bytesRead; i++) {
+        if (buffer[i] === 0x00) return false;
+      }
+      return true;
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -251,7 +371,11 @@ async function getFormattedChannel(channelId: string, userId: string, role: stri
     canPost,
     isMuted,
     isChannelLocked,
-    canPin: isMod || channel.type === 'DIRECT',
+    canPin: Boolean(
+      isMod ||
+      (channel.type === 'DIRECT' && !!m) ||
+      (channel.type === 'CLASS' && role === 'LECTURER' && !!m)
+    ),
     canModerate: isMod,
     canMentionAll: isMod,
     canManage: isMod,
@@ -309,7 +433,14 @@ async function checkChannelAccess(channelId: string, userId: string, userRole: s
   if (mutedMembers.has(`${channelId}:${userId}`)) canPost = false;
   if (channelChatLocked.has(channelId) && !isMod) canPost = false;
 
-  const canPin = isAdmin || isDirect || isMod || (channel.type === 'CLASS' && userRole === 'LECTURER');
+  const canPin =
+    canView &&
+    (
+      isAdmin ||
+      (isDirect && !!membership) ||
+      isMod ||
+      (channel.type === 'CLASS' && userRole === 'LECTURER' && !!membership)
+    );
   const canManage = isMod;
 
   return { channel, membership, canView, canPost, canPin, canManage };
@@ -441,9 +572,14 @@ app.post('/api/auth/register', async (req, res) => {
   });
 });
 
-app.post('/api/auth/avatar', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res) => {
+app.post('/api/auth/avatar', requireAuth, avatarUpload.single('file'), async (req: AuthenticatedRequest, res) => {
   if (!req.file) return res.status(400).json({ error: 'Không tìm thấy tệp' });
-  const avatarUrl = `/uploads/${req.file.filename}`;
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!checkAvatarMagicBytes(req.file.path, ext)) {
+    try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(400).json({ error: 'Tệp ảnh đại diện không hợp lệ hoặc lỗi chữ ký nhị phân' });
+  }
+  const avatarUrl = `/uploads/avatars/${req.file.filename}`;
   const updated = await prisma.user.update({
     where: { id: req.user!.id },
     data: { avatar: avatarUrl },
@@ -709,7 +845,7 @@ app.post('/api/messages/:id/pin', requireAuth, async (req: AuthenticatedRequest,
   if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
 
   const access = await checkChannelAccess(msg.channelId, req.user!.id, req.user!.role);
-  if (!access.canPin) {
+  if (!access.canView || !access.canPin) {
     return res.status(403).json({ error: 'Bạn không có quyền ghim tin nhắn trong kênh này' });
   }
 
@@ -783,6 +919,12 @@ app.delete('/api/messages/:id', requireAuth, async (req: AuthenticatedRequest, r
 // Danh sách file của kênh (FilesTab)
 app.get('/api/channels/:id/files', requireAuth, async (req: AuthenticatedRequest, res) => {
   const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canView) {
+    return res.status(403).json({ error: 'Bạn không có quyền truy cập tệp của kênh này' });
+  }
+
   const kind = req.query.kind as string;
   let where: any = { channelId };
 
@@ -852,6 +994,12 @@ app.get('/api/channels/:id/files', requireAuth, async (req: AuthenticatedRequest
 // Danh sách các link đã chia sẻ trong kênh
 app.get('/api/channels/:id/links', requireAuth, async (req: AuthenticatedRequest, res) => {
   const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canView) {
+    return res.status(403).json({ error: 'Bạn không có quyền truy cập liên kết của kênh này' });
+  }
+
   const messages = await prisma.message.findMany({
     where: {
       channelId,
@@ -968,8 +1116,12 @@ app.get('/api/files/:id', requireAuth, async (req: AuthenticatedRequest, res) =>
     }
   }
 
-  const filePath = path.join(UPLOAD_DIR, att.path);
-  if (!fs.existsSync(filePath)) return res.status(404).send('Tệp đã bị xoá');
+  // Tìm trong ATTACHMENT_DIR trước, sau đó fallback sang UPLOAD_DIR
+  let filePath = path.join(ATTACHMENT_DIR, att.path);
+  if (!fs.existsSync(filePath)) {
+    filePath = path.join(UPLOAD_DIR, att.path);
+  }
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return res.status(404).send('Tệp đã bị xoá');
   res.setHeader('Content-Type', att.mime);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
@@ -989,6 +1141,12 @@ app.get('/api/messages/:id/acks', requireAuth, async (req: AuthenticatedRequest,
     },
   });
   if (!msg) return res.status(404).json({ error: 'Tin nhắn không tồn tại' });
+
+  // Kiểm tra quyền: người gọi API phải có quyền xem kênh chứa tin nhắn này
+  const access = await checkChannelAccess(msg.channelId, req.user!.id, req.user!.role);
+  if (!access.canView) {
+    return res.status(403).json({ error: 'Bạn không có quyền xem thông tin đọc tin nhắn của kênh này' });
+  }
 
   const students = msg.channel.members.filter((m) => m.user.role === 'STUDENT');
 
@@ -1016,38 +1174,67 @@ app.get('/api/messages/:id/acks', requireAuth, async (req: AuthenticatedRequest,
   });
 });
 
-// Channel Avatars & Presets
-app.post('/api/channel-avatars/:id', requireAuth, upload.single('file'), async (req: AuthenticatedRequest, res) => {
+// Channel Avatars & Presets (Yêu cầu quyền quản lý kênh canManage)
+app.post('/api/channel-avatars/:id', requireAuth, avatarUpload.single('file'), async (req: AuthenticatedRequest, res) => {
+  const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) {
+    if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(404).json({ error: 'Kênh không tồn tại' });
+  }
+  if (!access.canManage) {
+    if (req.file) try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(403).json({ error: 'Bạn không có quyền quản lý ảnh đại diện kênh này' });
+  }
   if (!req.file) return res.status(400).json({ error: 'Không có tệp ảnh' });
-  const avatarUrl = `/uploads/${req.file.filename}`;
+
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!checkAvatarMagicBytes(req.file.path, ext)) {
+    try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(400).json({ error: 'Tệp ảnh không hợp lệ hoặc lỗi chữ ký nhị phân' });
+  }
+
+  const avatarUrl = `/uploads/avatars/${req.file.filename}`;
   await prisma.channel.update({
-    where: { id: req.params.id },
+    where: { id: channelId },
     data: { avatar: avatarUrl },
   });
-  io.to(`channel:${req.params.id}`).emit('channel:changed', { channelId: req.params.id });
-  const ch = await getFormattedChannel(req.params.id, req.user!.id, req.user!.role);
+  io.to(`channel:${channelId}`).emit('channel:changed', { channelId });
+  const ch = await getFormattedChannel(channelId, req.user!.id, req.user!.role);
   res.json({ channel: ch });
 });
 
 app.put('/api/channel-avatars/:id/preset', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canManage) {
+    return res.status(403).json({ error: 'Bạn không có quyền thay đổi biểu tượng kênh này' });
+  }
   const { preset } = req.body;
   const avatarUrl = `/api/channel-avatars/presets/${preset}.svg`;
   await prisma.channel.update({
-    where: { id: req.params.id },
+    where: { id: channelId },
     data: { avatar: avatarUrl },
   });
-  io.to(`channel:${req.params.id}`).emit('channel:changed', { channelId: req.params.id });
-  const ch = await getFormattedChannel(req.params.id, req.user!.id, req.user!.role);
+  io.to(`channel:${channelId}`).emit('channel:changed', { channelId });
+  const ch = await getFormattedChannel(channelId, req.user!.id, req.user!.role);
   res.json({ channel: ch });
 });
 
 app.delete('/api/channel-avatars/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const channelId = req.params.id;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canManage) {
+    return res.status(403).json({ error: 'Bạn không có quyền xoá ảnh đại diện kênh này' });
+  }
   await prisma.channel.update({
-    where: { id: req.params.id },
+    where: { id: channelId },
     data: { avatar: null },
   });
-  io.to(`channel:${req.params.id}`).emit('channel:changed', { channelId: req.params.id });
-  const ch = await getFormattedChannel(req.params.id, req.user!.id, req.user!.role);
+  io.to(`channel:${channelId}`).emit('channel:changed', { channelId });
+  const ch = await getFormattedChannel(channelId, req.user!.id, req.user!.role);
   res.json({ channel: ch });
 });
 
@@ -2271,15 +2458,49 @@ app.post('/api/channels/join/:token', requireAuth, async (req: AuthenticatedRequ
 });
 
 // Bảo mật thư mục tải lên: Tuyệt đối KHÔNG phục vụ static tự do /uploads.
-// Chỉ cho phép ảnh avatar công khai, mọi tệp đính kèm phải qua /api/files/:id có kiểm tra quyền thành viên kênh.
+// Tách biệt hoàn toàn thư mục uploads/avatars công khai và uploads/attachments riêng tư.
+// Mọi tệp đính kèm bắt buộc phải tải qua /api/files/:id có xác thực quyền thành viên kênh.
+app.get('/uploads/avatars/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const ext = path.extname(filename).toLowerCase();
+  if (!ALLOWED_AVATAR_EXTENSIONS.has(ext)) {
+    return res.status(403).send('Chỉ hỗ trợ xem ảnh đại diện định dạng an toàn (JPG, PNG, WebP, GIF)');
+  }
+  const filePath = path.join(AVATAR_DIR, filename);
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    return res.status(404).send('Không tìm thấy tệp');
+  }
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  res.sendFile(filePath);
+});
+
+// Chặn truy cập tệp đính kèm qua đường dẫn /uploads/:filename
+// Chỉ phục vụ ảnh đại diện hợp lệ nếu có và tuyệt đối từ chối tệp đính kèm
 app.get('/uploads/:filename', (req, res) => {
   const filename = path.basename(req.params.filename);
   const ext = path.extname(filename).toLowerCase();
-  if (!['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
+  if (!ALLOWED_AVATAR_EXTENSIONS.has(ext)) {
     return res.status(403).send('Truy cập tệp đính kèm bắt buộc qua /api/files/:id có xác thực quyền thành viên');
   }
-  const filePath = path.join(UPLOAD_DIR, filename);
-  if (!fs.existsSync(filePath)) return res.status(404).send('Không tìm thấy tệp');
+
+  // Nếu file này nằm trong thư mục attachments, từ chối ngay lập tức
+  const attachPath = path.join(ATTACHMENT_DIR, filename);
+  if (fs.existsSync(attachPath)) {
+    return res.status(403).send('Truy cập tệp đính kèm bắt buộc qua /api/files/:id có xác thực quyền thành viên');
+  }
+
+  // Chỉ phục vụ nếu tồn tại trong AVATAR_DIR hoặc thư mục uploads gốc (ảnh avatar cũ)
+  let filePath = path.join(AVATAR_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    filePath = path.join(UPLOAD_DIR, filename);
+  }
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    return res.status(404).send('Không tìm thấy tệp');
+  }
+
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
   res.sendFile(filePath);
 });
 
@@ -2297,41 +2518,46 @@ io.use((socket: Socket, next) => {
   next();
 });
 
-io.on('connection', async (socket: Socket) => {
+io.on('connection', (socket: Socket) => {
   const user: AuthUser = (socket as any).user;
   onlineUsers.add(user.id);
 
   socket.join(`user:${user.id}`);
 
-  // Gia nhập tất cả các phòng kênh của user
-  const memberships = await prisma.channelMember.findMany({
-    where: { userId: user.id },
-    select: { channelId: true },
-  });
-  memberships.forEach((m) => socket.join(`channel:${m.channelId}`));
-
-  // Khi người dùng kết nối (có internet), đánh dấu đã nhận cho các tin nhắn mới nhất trong các kênh của họ
-  for (const m of memberships) {
+  // Gia nhập các phòng kênh và xử lý presence trong background để không chặn đăng ký listener
+  (async () => {
     try {
-      const latestMsg = await prisma.message.findFirst({
-        where: { channelId: m.channelId },
-        orderBy: { seq: 'desc' },
-        select: { seq: true },
+      const memberships = await prisma.channelMember.findMany({
+        where: { userId: user.id },
+        select: { channelId: true },
       });
-      if (latestMsg && latestMsg.seq > getDeliveredSeq(m.channelId, user.id)) {
-        setDeliveredSeq(m.channelId, user.id, latestMsg.seq);
-        io.to(`channel:${m.channelId}`).emit('message:received', {
-          channelId: m.channelId,
-          userId: user.id,
-          maxSeq: latestMsg.seq,
-        });
-      }
-    } catch {
-      // Bỏ qua lỗi truy vấn phụ
-    }
-  }
+      memberships.forEach((m) => socket.join(`channel:${m.channelId}`));
 
-  io.emit('presence', { userId: user.id, online: true });
+      for (const m of memberships) {
+        try {
+          const latestMsg = await prisma.message.findFirst({
+            where: { channelId: m.channelId },
+            orderBy: { seq: 'desc' },
+            select: { seq: true },
+          });
+          if (latestMsg && latestMsg.seq > getDeliveredSeq(m.channelId, user.id)) {
+            setDeliveredSeq(m.channelId, user.id, latestMsg.seq);
+            io.to(`channel:${m.channelId}`).emit('message:received', {
+              channelId: m.channelId,
+              userId: user.id,
+              maxSeq: latestMsg.seq,
+            });
+          }
+        } catch {
+          // Bỏ qua lỗi truy vấn phụ
+        }
+      }
+
+      io.emit('presence', { userId: user.id, online: true });
+    } catch {
+      // Bỏ qua lỗi kết nối nền
+    }
+  })();
 
   // 1. Gửi tin nhắn
   socket.on('message:send', async (data, ack) => {
@@ -2529,7 +2755,7 @@ io.on('connection', async (socket: Socket) => {
       if (!msg) return ack?.({ ok: false, error: 'Tin nhắn không tồn tại' });
 
       const access = await checkChannelAccess(msg.channelId, user.id, user.role);
-      if (!access.canPin) {
+      if (!access.canView || !access.canPin) {
         return ack?.({ ok: false, error: 'Bạn không có quyền ghim tin nhắn trong kênh này', code: 'FORBIDDEN' });
       }
 
@@ -2561,6 +2787,11 @@ io.on('connection', async (socket: Socket) => {
     try {
       const msg = await prisma.message.findUnique({ where: { id: messageId } });
       if (!msg) return ack?.({ ok: false, error: 'Tin nhắn không tồn tại' });
+
+      const access = await checkChannelAccess(msg.channelId, user.id, user.role);
+      if (!access.canView) {
+        return ack?.({ ok: false, error: 'Bạn không có quyền trong kênh này', code: 'FORBIDDEN' });
+      }
 
       await prisma.channelMember.updateMany({
         where: { channelId: msg.channelId, userId: user.id },
@@ -2625,7 +2856,10 @@ io.on('connection', async (socket: Socket) => {
       let lastSeq = data?.maxSeq || data?.seq || 0;
       if (messageId) {
         const msg = await prisma.message.findUnique({ where: { id: messageId } });
-        if (msg && msg.seq) lastSeq = Math.max(lastSeq, msg.seq);
+        if (!msg || msg.channelId !== channelId) {
+          return ack?.({ ok: false, error: 'Tin nhắn không thuộc kênh được chỉ định', code: 'INVALID_MESSAGE' });
+        }
+        if (msg.seq) lastSeq = Math.max(lastSeq, msg.seq);
       }
 
       // Đảm bảo tính đơn điệu không bị lùi seq

@@ -183,6 +183,7 @@ async function main() {
   const testScripts = [
     path.join(SCRIPTS_DIR, 'test-realtime.ts'),
     path.join(SCRIPTS_DIR, 'test-features.ts'),
+    path.join(SCRIPTS_DIR, 'test-security.ts'),
   ].filter(fs.existsSync);
 
   if (testScripts.length === 0) {
