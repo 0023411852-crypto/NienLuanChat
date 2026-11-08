@@ -17,7 +17,7 @@ Nhắn tin **thời gian thực**, **đồng bộ trạng thái đã đọc** tr
 ## Milestone 1 — đã làm được
 
 - **Đăng ký / đăng nhập** bằng email + mật khẩu (bcrypt), cấp JWT; tài khoản bị khoá không đăng nhập được.
-- **3 loại kênh**: Thông báo, Lớp học phần, Tin nhắn riêng (có nút `+` để mở tin nhắn riêng với bất kỳ ai, hoặc bấm vào tên thành viên).
+- **4 loại kênh**: Thông báo, Lớp học phần, Tin nhắn riêng và **Cộng đồng** (có nút `+` để mở tin nhắn riêng với bất kỳ ai, hoặc bấm vào tên thành viên).
 - **Danh bạ nội bộ**: hiển thị tất cả thành viên không bị khoá (trừ tài khoản hiện tại), chia thành 3 nhóm **Sinh viên / Giảng viên / Quản trị viên**, có tìm kiếm theo tên, MSSV hoặc email và mở tin nhắn riêng trực tiếp. Ứng dụng không còn quy trình gửi, duyệt hoặc huỷ kết bạn.
 - **Nhắn tin realtime** qua Socket.IO, xác thực JWT ngay lúc bắt tay (handshake). Mỗi tin có `clientId` (UUID do client sinh) → server **chống gửi trùng** và trả `ack`.
 - **Đang soạn tin...** và **trạng thái online** (chấm xanh, danh sách thành viên đang hoạt động / ngoại tuyến, "Hoạt động lúc ...").
@@ -272,7 +272,7 @@ Hệ thống cung cấp API tìm kiếm `/api/search`, `/api/search/messages` v�
 | POST | `/api/auth/register` · `/api/auth/login` | Đăng ký / đăng nhập → `{ token, user }` |
 | GET | `/api/auth/me` | Thông tin người dùng hiện tại |
 | GET | `/api/channels` · `/api/channels/:id` | Kênh của tôi (kèm số chưa đọc, tin cuối, thành viên) |
-| GET | `/api/channels/:id/messages?before=<seq>&limit=30` | Lịch sử (tin cũ hơn); `?after=<seq>` để lấy tin mới hơn |
+| GET | `/api/channels/:id/messages?before=<seq>&limit=30` | Lịch sử (tin cũ hơn); `?after=<seq>` để lấy tin mới hơn. `seq` là số tăng toàn cục do PostgreSQL cấp |
 | POST | `/api/channels/:id/messages` | Gửi tin qua REST (dự phòng, cũng chống trùng `clientId`) |
 | POST | `/api/channels/:id/read` | Đánh dấu đã đọc |
 | GET | `/api/sync?after=<seq>` | Tải bù mọi tin bị lỡ + danh sách kênh mới nhất |
@@ -282,17 +282,21 @@ Hệ thống cung cấp API tìm kiếm `/api/search`, `/api/search/messages` v�
 | POST | `/api/messages/:id/pin` · GET `/api/channels/:id/pins` | Ghim/bỏ ghim `{ pinned }` · danh sách tin ghim |
 | POST · GET | `/api/messages/:id/ack` · `/api/messages/:id/acks` | Xác nhận đã đọc · danh sách đã/chưa xác nhận |
 | PATCH | `/api/channels/:id/settings` | Mức thông báo `{ notifyLevel }` |
-| POST | `/api/channels/:id/uploads` | Tải tệp lên (multipart, trường `file`) → `{ attachment }` |
-| GET | `/api/files/:id` (`?download=1`) | Xem / tải tệp (chỉ thành viên kênh) |
+| POST | `/api/channels/:id/uploads` | Tải tệp lên (multipart, trường `file`, tuỳ chọn `clientId`) → `{ attachment }`; lặp cùng `clientId` trả lại attachment cũ |
+| GET | `/api/files/:id` (`?download=1`) | Xem / tải tệp (chỉ thành viên kênh); tệp thuộc tin đã xoá trả về 404 |
 | GET | `/api/channels/:id/files?kind=` · `/api/search/files?q=&kind=&channelId=&senderId=` | Tài liệu của kênh · tìm tệp |
 | GET | `/api/search/messages?q=&channelId=&senderId=&hasFile=1` | Tìm tin nhắn |
 | GET · POST | `/api/push/public-key` · `/api/push/subscribe` · `/api/push/unsubscribe` | Web Push |
+| DELETE | `/api/admin/channels/:id` | Xoá kênh rỗng; kênh còn tin nhắn trả `409`, cần lưu trữ thay vì xoá |
 | GET | `/api/admin/stats` | Thống kê (ADMIN) |
 | GET · POST · PATCH | `/api/admin/users` · `/api/admin/users/:id` · `/reset-password` · `/import` | Quản lý người dùng (ADMIN) |
 | GET · POST · PATCH · DELETE | `/api/admin/channels[/:id]` · `/api/admin/channels/:id/members[/:userId]` | Quản lý kênh & thành viên (ADMIN; GV với lớp mình phụ trách) |
 
 Mọi API (trừ đăng ký/đăng nhập) cần header `Authorization: Bearer <token>`. Riêng các request GET cũng chấp nhận cookie httpOnly `kc_token`
 (đặt khi đăng nhập) để ảnh/tệp hiển thị được bằng thẻ `<img>` / link tải.
+
+Socket `message:send` giới hạn 30 tin / phút / người dùng; khi vượt giới hạn server trả `code: "RATE_LIMITED"`.
+Để chạy test với DB riêng, đặt `DATABASE_URL_TEST` trong môi trường (tham khảo `server/.env.test.example`); test runner sẽ ưu tiên biến này thay cho `DATABASE_URL`.
 
 ## Lỗi thường gặp
 
@@ -311,3 +315,64 @@ Mọi API (trừ đăng ký/đăng nhập) cần header `Authorization: Bearer <
 - Bình chọn nhanh trong lớp, "giờ yên tĩnh" cho thông báo, giao diện mobile / PWA cài đặt được.
 - Lưu tệp lên dịch vụ lưu trữ đối tượng (S3/MinIO) thay cho thư mục `uploads/` khi triển khai nhiều máy chủ; Socket.IO Redis adapter.
 - Quét virus tệp tải lên (ClamAV), xem trước PDF ngay trong ứng dụng.
+- Tách PostgreSQL test qua `DATABASE_URL_TEST` để bộ test tích hợp không ghi vào DB phát triển.
+
+### Hạn chế & Hướng phát triển
+
+| Hạn chế | Hướng khắc phục | Ưu tiên |
+|---|---|---|
+| Upload local, chưa scale ngang | S3/MinIO + Redis adapter cho Socket.IO | Cao |
+| Chưa có read-receipt từng tin độc lập | Thêm bảng `MessageRead` nếu nghiệp vụ cần | Thấp |
+| Chưa quét virus | Tích hợp ClamAV trước khi lưu tệp | Trung bình |
+| Bộ test tích hợp cần PostgreSQL riêng | Dùng `DATABASE_URL_TEST` và chạy test DB biệt lập | Cao |
+
+### Sơ đồ luồng chính
+
+```mermaid
+erDiagram
+  User ||--o{ ChannelMember : joins
+  Channel ||--o{ ChannelMember : has
+  Channel ||--o{ Message : contains
+  Message ||--o{ Attachment : includes
+  Message ||--o{ Mention : references
+  User ||--o{ Message : sends
+  User ||--o{ Attachment : uploads
+  User ||--o{ Mention : receives
+  User ||--o{ PushSubscription : owns
+  ChannelMember {
+    int lastReadSeq
+  }
+```
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant O as IndexedDB outbox
+  participant S as Server
+  C->>O: Lưu tin và tệp khi offline
+  C->>S: Upload với clientId khi online
+  S-->>C: Attachment cũ/mới (idempotent)
+  C->>S: message:send
+  S-->>C: message:new + ack
+```
+
+```mermaid
+sequenceDiagram
+  participant A as Thiết bị A
+  participant S as Server
+  participant B as Thiết bị B
+  A->>S: channel:read(maxSeq)
+  S->>S: UPDATE có điều kiện lastReadSeq < maxSeq
+  S-->>A: channel:read
+  S-->>B: channel:read qua user:<id>
+```
+
+```mermaid
+sequenceDiagram
+  participant S as Server
+  participant P as Web Push
+  participant W as Service Worker
+  S->>P: Push tới người dùng offline
+  P->>W: Push event
+  W-->>W: Hiển thị notification
+```

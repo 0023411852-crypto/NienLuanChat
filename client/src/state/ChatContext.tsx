@@ -125,6 +125,8 @@ export function ChatProvider({ me, onUnauthorized, children }: { me: User; onUna
             const { attachment } = await uploadFile<{ attachment: Attachment }>(
               `/api/channels/${item.channelId}/uploads`, f.blob, f.name,
               (p) => dispatch({ type: 'PENDING_PROGRESS', clientId: item.clientId, channelId: item.channelId, progress: Math.round(p / total) }),
+              undefined,
+              f.localId,
             );
             item = { ...item, files: item.files.slice(1), attachments: [...(item.attachments ?? []), attachment] };
             await outbox.put(item);

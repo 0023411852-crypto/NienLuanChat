@@ -83,7 +83,7 @@ const KhungSoanTin = forwardRef<KhungSoanTinHandle, { channel: Channel; replyTo:
         patchChip(chip.localId, { status: 'uploading', progress: 0, abort, error: undefined });
         uploadFile<{ attachment: Attachment }>(
           `/api/channels/${channel.id}/uploads`, chip.file, chip.file.name,
-          (p) => patchChip(chip.localId, { progress: p }), abort.signal,
+          (p) => patchChip(chip.localId, { progress: p }), abort.signal, chip.localId,
         )
           .then(({ attachment }) => patchChip(chip.localId, { status: 'done', progress: 100, attachment }))
           .catch((e: ApiError) => {

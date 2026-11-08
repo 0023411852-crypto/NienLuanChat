@@ -448,6 +448,20 @@ async function checkChannelAccess(channelId: string, userId: string, userRole: s
 
 // Giới hạn số lần thử đăng nhập sai liên tục để chống Brute-Force
 const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const messageRateLimits = new Map<string, number[]>();
+
+function consumeMessageRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const windowStart = now - 60 * 1000;
+  const recent = (messageRateLimits.get(userId) || []).filter((timestamp) => timestamp > windowStart);
+  if (recent.length >= 30) {
+    messageRateLimits.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  messageRateLimits.set(userId, recent);
+  return true;
+}
 
 function checkLoginRateLimit(key: string): boolean {
   const record = failedLoginAttempts.get(key);
@@ -1060,6 +1074,31 @@ app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async 
     return res.status(403).json({ error: 'Bạn không có quyền tải tệp lên kênh này' });
   }
 
+  const clientId = typeof req.body.clientId === 'string' && req.body.clientId.trim()
+    ? req.body.clientId.trim()
+    : null;
+  if (clientId) {
+    const existing = await prisma.attachment.findFirst({
+      where: { uploaderId: req.user!.id, clientId },
+    });
+    if (existing) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.json({
+        attachment: {
+          id: existing.id,
+          filename: existing.filename,
+          mime: existing.mime,
+          size: existing.size,
+          isImage: existing.isImage,
+          url: `/api/files/${existing.id}`,
+          channelId: existing.channelId,
+          uploaderId: existing.uploaderId,
+          createdAt: existing.createdAt.toISOString(),
+        },
+      });
+    }
+  }
+
   const ext = path.extname(req.file.originalname).toLowerCase();
   if (!checkMagicBytes(req.file.path, ext)) {
     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -1069,6 +1108,7 @@ app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async 
   const isImage = req.file.mimetype.startsWith('image/');
   const attachment = await prisma.attachment.create({
     data: {
+      clientId,
       filename: Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
       mime: req.file.mimetype,
       size: req.file.size,
@@ -1099,9 +1139,10 @@ app.post('/api/channels/:id/uploads', requireAuth, upload.single('file'), async 
 app.get('/api/files/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
   const att = await prisma.attachment.findUnique({
     where: { id: req.params.id },
-    include: { channel: { select: { type: true } } },
+    include: { channel: { select: { type: true } }, message: { select: { deletedAt: true } } },
   });
   if (!att) return res.status(404).send('Không tìm thấy tệp');
+  if (att.message?.deletedAt) return res.status(404).send('Tệp thuộc tin nhắn đã bị xoá');
 
   // Kiểm tra quyền: ADMIN hoặc thành viên kênh mới được tải file
   if (req.user!.role !== 'ADMIN') {
@@ -1130,6 +1171,46 @@ app.get('/api/files/:id', requireAuth, async (req: AuthenticatedRequest, res) =>
   } else {
     res.sendFile(filePath);
   }
+});
+
+app.post('/api/channels/:id/read', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const channelId = req.params.id;
+  const messageId = typeof req.body?.messageId === 'string' ? req.body.messageId : null;
+  let maxSeq = Number.isInteger(req.body?.maxSeq) ? req.body.maxSeq : 0;
+  const access = await checkChannelAccess(channelId, req.user!.id, req.user!.role);
+  if (!access.channel) return res.status(404).json({ error: 'Kênh không tồn tại' });
+  if (!access.canView) return res.status(403).json({ error: 'Bạn không có quyền truy cập kênh này' });
+
+  if (messageId) {
+    const message = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!message || message.channelId !== channelId) {
+      return res.status(400).json({ error: 'Tin nhắn không thuộc kênh được chỉ định', code: 'INVALID_MESSAGE' });
+    }
+    maxSeq = Math.max(maxSeq, message.seq);
+  }
+
+  await prisma.channelMember.updateMany({
+    where: { channelId, userId: req.user!.id, lastReadSeq: { lt: maxSeq } },
+    data: {
+      lastReadSeq: maxSeq,
+      lastReadMessageId: messageId || undefined,
+      lastReadAt: new Date(),
+    },
+  });
+  const member = await prisma.channelMember.findUnique({
+    where: { channelId_userId: { channelId, userId: req.user!.id } },
+  });
+  const state = {
+    channelId,
+    messageId: member?.lastReadMessageId || null,
+    seq: member?.lastReadSeq || 0,
+    userId: req.user!.id,
+    at: new Date().toISOString(),
+  };
+  setDeliveredSeq(channelId, req.user!.id, state.seq);
+  io.to(`channel:${channelId}`).emit('channel:read', state);
+  io.to(`user:${req.user!.id}`).emit('channel:read', state);
+  res.json({ ok: true, ...state });
 });
 
 // Báo cáo xác nhận đã đọc thông báo (Dùng ChannelMember.lastReadSeq theo đề xuất của Thầy)
@@ -2087,6 +2168,10 @@ app.delete('/api/admin/channels/:id', requireAuth, async (req: AuthenticatedRequ
     });
   }
 
+  const messageCount = await prisma.message.count({ where: { channelId: channel.id } });
+  if (messageCount > 0) {
+    return res.status(409).json({ error: 'Kênh còn tin nhắn, hãy dùng lưu trữ (archive) thay vì xóa' });
+  }
 
   // Xoá cấu hình cấm chat của kênh nếu có
   channelChatLocked.delete(channel.id);
@@ -2596,6 +2681,9 @@ io.on('connection', (socket: Socket) => {
         }
         return ack?.({ ok: false, error: errMsg, code: 'FORBIDDEN' });
       }
+      if (!consumeMessageRateLimit(user.id)) {
+        return ack?.({ ok: false, error: 'Bạn đã gửi quá 30 tin trong 1 phút, vui lòng thử lại sau', code: 'RATE_LIMITED' });
+      }
 
       // Kiểm tra tệp đính kèm: tệp phải thuộc đúng kênh này
       if (attachmentIds?.length) {
@@ -2650,7 +2738,7 @@ io.on('connection', (socket: Socket) => {
 
       // Tự động đánh dấu người gửi đã đọc tin nhắn của chính mình
       await prisma.channelMember.updateMany({
-        where: { channelId, userId: user.id },
+        where: { channelId, userId: user.id, lastReadSeq: { lt: msg.seq } },
         data: {
           lastReadSeq: msg.seq,
           lastReadMessageId: msg.id,
@@ -2862,16 +2950,8 @@ io.on('connection', (socket: Socket) => {
         if (msg.seq) lastSeq = Math.max(lastSeq, msg.seq);
       }
 
-      // Đảm bảo tính đơn điệu không bị lùi seq
-      const currentMember = await prisma.channelMember.findUnique({
-        where: { channelId_userId: { channelId, userId: user.id } },
-      });
-      if (currentMember && currentMember.lastReadSeq > lastSeq) {
-        lastSeq = currentMember.lastReadSeq;
-      }
-
       await prisma.channelMember.updateMany({
-        where: { channelId, userId: user.id },
+        where: { channelId, userId: user.id, lastReadSeq: { lt: lastSeq } },
         data: {
           lastReadMessageId: messageId || null,
           lastReadSeq: lastSeq,
@@ -2879,9 +2959,16 @@ io.on('connection', (socket: Socket) => {
         },
       });
 
+      const currentMember = await prisma.channelMember.findUnique({
+        where: { channelId_userId: { channelId, userId: user.id } },
+      });
+      lastSeq = currentMember?.lastReadSeq || 0;
+      const effectiveMessageId = currentMember?.lastReadSeq === lastSeq
+        ? currentMember.lastReadMessageId
+        : null;
       setDeliveredSeq(channelId, user.id, lastSeq);
 
-      const st = { channelId, messageId: messageId || null, seq: lastSeq, userId: user.id, at: new Date().toISOString() };
+      const st = { channelId, messageId: effectiveMessageId || null, seq: lastSeq, userId: user.id, at: new Date().toISOString() };
       io.to(`channel:${channelId}`).emit('channel:read', st);
       io.to(`user:${user.id}`).emit('channel:read', st);
       ack?.({ ok: true, ...st });

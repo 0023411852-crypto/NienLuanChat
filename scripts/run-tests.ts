@@ -139,7 +139,12 @@ async function main() {
       cwd: SERVER_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        ...(process.env.DATABASE_URL_TEST
+          ? { DATABASE_URL: process.env.DATABASE_URL_TEST }
+          : {}),
+      },
       // Tạo process group riêng để kill cả cây
       ...(IS_WIN ? {} : { detached: true }),
     });

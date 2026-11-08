@@ -124,6 +124,7 @@ model Message {
 
 model Attachment {
   id         String   @id @default(uuid())
+  clientId   String?
   filename   String
   mime       String
   size       Int
@@ -138,6 +139,8 @@ model Attachment {
   channel  Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   uploader User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
   message  Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@unique([uploaderId, clientId])
 }
 
 model Mention {

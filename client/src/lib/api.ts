@@ -45,6 +45,7 @@ export function uploadFile<T>(
   filename: string,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
+  clientId?: string,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -70,6 +71,7 @@ export function uploadFile<T>(
     signal?.addEventListener('abort', () => xhr.abort());
     const fd = new FormData();
     fd.append('file', file, filename);
+    if (clientId) fd.append('clientId', clientId);
     xhr.send(fd);
   });
 }
