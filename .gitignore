@@ -103,3 +103,5 @@ desktop.ini
 tmp/
 temp/
 *.tmp
+
+.vscode/

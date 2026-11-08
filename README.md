@@ -18,6 +18,7 @@ Nhắn tin **thời gian thực**, **đồng bộ trạng thái đã đọc** tr
 
 - **Đăng ký / đăng nhập** bằng email + mật khẩu (bcrypt), cấp JWT; tài khoản bị khoá không đăng nhập được.
 - **3 loại kênh**: Thông báo, Lớp học phần, Tin nhắn riêng (có nút `+` để mở tin nhắn riêng với bất kỳ ai, hoặc bấm vào tên thành viên).
+- **Danh bạ nội bộ**: hiển thị tất cả thành viên không bị khoá (trừ tài khoản hiện tại), chia thành 3 nhóm **Sinh viên / Giảng viên / Quản trị viên**, có tìm kiếm theo tên, MSSV hoặc email và mở tin nhắn riêng trực tiếp. Ứng dụng không còn quy trình gửi, duyệt hoặc huỷ kết bạn.
 - **Nhắn tin realtime** qua Socket.IO, xác thực JWT ngay lúc bắt tay (handshake). Mỗi tin có `clientId` (UUID do client sinh) → server **chống gửi trùng** và trả `ack`.
 - **Đang soạn tin...** và **trạng thái online** (chấm xanh, danh sách thành viên đang hoạt động / ngoại tuyến, "Hoạt động lúc ...").
 - **Đồng bộ đã đọc nhiều thiết bị**: đọc ở tab/máy này thì badge chưa đọc ở tab/máy khác của cùng tài khoản tự mất (phòng `user:<id>`). Trạng thái đọc chỉ tiến lên, không bị lùi.
@@ -223,8 +224,8 @@ khoachat/
         │   ├── reducer.ts      # kênh, tin, ghim, online, typing, kết nối, nhảy tới tin
         │   ├── ChatContext.tsx # socket, outbox (kèm tệp), tải bù, đã đọc, thông báo
         │   └── toast.tsx
-        └── components/         # Sidebar, ChannelView, MessageList/Item, Composer, RightPanel, SearchModal,
-                                # Attachments (lightbox), AckModal, NotifyMenu, admin/ (Dashboard, Users, Channels, Members)
+        └── components/         # ThanhBen, BoCucChat, XemDanhBa, KhungSoanTin, TinNhanItem, CotPhai,
+                                # ModalTimKiem, ModalTheDanhBa, admin/ (Dashboard, Users, Channels, Members)
 ```
 
 ## Thiết kế chính
@@ -275,7 +276,7 @@ Hệ thống cung cấp API tìm kiếm `/api/search`, `/api/search/messages` v�
 | POST | `/api/channels/:id/messages` | Gửi tin qua REST (dự phòng, cũng chống trùng `clientId`) |
 | POST | `/api/channels/:id/read` | Đánh dấu đã đọc |
 | GET | `/api/sync?after=<seq>` | Tải bù mọi tin bị lỡ + danh sách kênh mới nhất |
-| GET | `/api/users` · POST `/api/direct` | Danh sách người dùng · mở/tạo tin nhắn riêng |
+| GET | `/api/friends` · `/api/users` · POST `/api/direct` | Danh bạ nội bộ (loại trừ tài khoản hiện tại và tài khoản bị khoá) · danh sách người dùng · mở/tạo tin nhắn riêng; không có luồng kết bạn |
 | GET | `/api/channels/:id/messages?around=<messageId>` | Ngữ cảnh quanh một tin (nhảy tới tin) |
 | PATCH · DELETE | `/api/messages/:id` | Sửa · xoá tin |
 | POST | `/api/messages/:id/pin` · GET `/api/channels/:id/pins` | Ghim/bỏ ghim `{ pinned }` · danh sách tin ghim |
