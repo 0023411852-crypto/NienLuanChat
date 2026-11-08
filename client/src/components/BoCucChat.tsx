@@ -22,7 +22,7 @@ function useHash() {
 }
 
 export default function BoCucChat({ onLogout }: { onLogout: () => void }) {
-  const { state, me, selectChannel, openDirect, incomingRequests } = useChat();
+  const { state, me, selectChannel, openDirect } = useChat();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<MainNavTab>('chats');
   const [panel, setPanel] = useState<PanelTab | null>(() => (localStorage.getItem('khoachat.panel') as PanelTab | null) || 'members');
@@ -117,7 +117,6 @@ export default function BoCucChat({ onLogout }: { onLogout: () => void }) {
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
         unreadTotal={totalUnread}
-        pendingRequestsTotal={(incomingRequests || []).length}
         me={me}
         onOpenProfile={() => setShowChinhSuaAnhDaiDien(true)}
         onOpenAdmin={() => (location.hash = '#/admin')}
@@ -128,7 +127,7 @@ export default function BoCucChat({ onLogout }: { onLogout: () => void }) {
       {activeTab === 'chats' ? (
         <div className="flex min-w-0 flex-1 h-full overflow-hidden">
           {/* Chat ThanhBen (Channel list) */}
-          <ThanhBen onLogout={onLogout} onSearch={() => setSearch({})} adminActive={adminRoute !== null} />
+          <ThanhBen onSearch={() => setSearch({})} adminActive={adminRoute !== null} />
 
           {/* Chat Window */}
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-[#18191a]">

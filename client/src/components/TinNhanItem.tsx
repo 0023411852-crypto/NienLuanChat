@@ -6,7 +6,7 @@ import AnhDaiDien from './AnhDaiDien';
 import TepDinhKem from './TepDinhKem';
 import VanBanDinhDang from './VanBanDinhDang';
 import {
-  AlertIcon, CheckIcon, ClockIcon, ContactCardIcon, DoubleCheckIcon, EditIcon, PinIcon, PinOutlineIcon, ReplyIcon, TrashIcon, UsersIcon,
+  AlertIcon, CheckIcon, ClockIcon, ContactCardIcon, DoubleCheckIcon, EditIcon, PinIcon, PinOutlineIcon, ReplyIcon, TrashIcon,
 } from './BieuTuong';
 
 export interface MessageActions {
@@ -49,17 +49,6 @@ function StatusBadge({ m }: { m: UiMessage }) {
     </span>
   );
 }
-
-const ToolBtn = ({ title, onClick, children, danger }: { title: string; onClick: () => void; children: React.ReactNode; danger?: boolean }) => (
-  <button
-    title={title}
-    aria-label={title}
-    onClick={onClick}
-    className={`rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/80 ${danger ? 'hover:text-rose-600 dark:hover:text-rose-400' : 'hover:text-indigo-600 dark:hover:text-sky-400'}`}
-  >
-    {children}
-  </button>
-);
 
 function ContactCardBubble({
   card,
@@ -143,10 +132,10 @@ function ContactCardBubble({
 }
 
 function TinNhanItem({
-  m, mine, grouped, online, channel, meId, isStaff, mentioned, memberCount, actions, tokens,
+  m, mine, grouped, online, channel, meId, mentioned, actions, tokens,
 }: {
-  m: UiMessage; mine: boolean; grouped: boolean; online: boolean; channel: Channel; meId: string; isStaff: boolean;
-  mentioned: boolean; memberCount: number; actions: MessageActions; tokens?: string[];
+  m: UiMessage; mine: boolean; grouped: boolean; online: boolean; channel: Channel; meId: string;
+  mentioned: boolean; actions: MessageActions; tokens?: string[];
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.content);
@@ -186,8 +175,6 @@ function TinNhanItem({
       ? 'bg-amber-50 text-slate-800 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/30'
       : 'bg-white text-slate-800 ring-1 ring-slate-100 shadow-sm dark:bg-[#2b2d31] dark:text-slate-100 dark:ring-slate-700/60';
   const hasText = !!m.content || deleted;
-  const acked = m.ackUserIds.includes(meId);
-  const audience = Math.max(memberCount - 1, 0);
 
   return (
     <div

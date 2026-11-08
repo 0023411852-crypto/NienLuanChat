@@ -141,7 +141,7 @@ async function main() {
   });
 
   // 4. Kênh Lớp học phần: Cấu trúc dữ liệu và giải thuật (CLASS)
-  const chCTDL = await prisma.channel.create({
+  await prisma.channel.create({
     data: {
       type: 'CLASS',
       name: 'Cấu trúc dữ liệu & Giải thuật',
@@ -176,7 +176,7 @@ async function main() {
   console.log('✅ Đã tạo các kênh mẫu: Thông báo khoa, 2 Lớp học phần (CT299, CT177), Chat riêng 1-1');
 
   // --- TIN NHẮN TRONG KÊNH THÔNG BÁO CHUNG ---
-  const msgTB1 = await prisma.message.create({
+  await prisma.message.create({
     data: {
       clientId: 'seed-tb-1',
       channelId: chThongBao.id,
@@ -188,7 +188,7 @@ async function main() {
     },
   });
 
-  const msgTB2 = await prisma.message.create({
+  await prisma.message.create({
     data: {
       clientId: 'seed-tb-2',
       channelId: chThongBao.id,
@@ -239,7 +239,7 @@ async function main() {
     },
   });
 
-  const msgWeb2 = await prisma.message.create({
+  await prisma.message.create({
     data: {
       clientId: 'seed-web-2',
       channelId: chWeb.id,

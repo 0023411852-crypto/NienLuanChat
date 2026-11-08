@@ -257,7 +257,7 @@ export default function XemKenh({
         <ModalSuaKenh
           channel={channel}
           onClose={() => setShowEditModal(false)}
-          onUpdated={(updatedChannel) => {
+          onUpdated={() => {
             // Update channel in context
             // This will automatically update the UI since channel is from useChat context
             setShowEditModal(false);

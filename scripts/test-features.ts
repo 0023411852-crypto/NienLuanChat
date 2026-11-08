@@ -494,7 +494,7 @@ async function login(email: string, password = 'SinhVien@123') {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${sv1.token}` },
     });
-    assert(disbandRes.ok, '80. Chủ kênh cộng đồng giải tán nhóm vĩnh viễn');
+    assert(disbandRes.status === 409, '80. Chặn giải tán kênh cộng đồng còn lịch sử tin nhắn (409)');
 
     // Tính năng mở rộng: Preset SVG, Đổi Avatar
     console.log('\n--- KHỐI 8: Tính năng Mở rộng & Đa phương tiện (Cases 81-92) ---');

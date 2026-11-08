@@ -18,7 +18,6 @@ interface ThanhDieuHuongProps {
   activeTab: MainNavTab;
   onTabChange: (tab: MainNavTab) => void;
   unreadTotal: number;
-  pendingRequestsTotal: number;
   me: User;
   onOpenProfile: () => void;
   onOpenAdmin?: () => void;
@@ -29,7 +28,6 @@ export default function ThanhDieuHuong({
   activeTab,
   onTabChange,
   unreadTotal,
-  pendingRequestsTotal,
   me,
   onOpenProfile,
   onOpenAdmin,

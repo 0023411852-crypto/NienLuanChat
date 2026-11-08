@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '../state/ChatContext';
 import { useToast } from '../state/toast';
-import { channelTitle, directPeer, fmtShort, roleLabel } from '../lib/format';
+import { channelTitle, directPeer, fmtShort } from '../lib/format';
 import { disablePush, enableNotifications, hasPushSubscription, notifySupported, playSound, soundPref } from '../lib/notify';
 import { parseContactCard, type Channel } from '../types';
 import AnhDaiDien from './AnhDaiDien';
@@ -10,17 +10,13 @@ import {
   BellOffIcon,
   CheckIcon,
   DotsHorizontalIcon,
-  HashIcon,
-  LogoutIcon,
   MegaphoneIcon,
   PinIcon,
   PinOutlineIcon,
-  PlusIcon,
   SearchIcon,
   ShieldIcon,
   UserPlusIcon,
   UsersIcon,
-  XIcon,
 } from './BieuTuong';
 import ModalTinNhanRieng from './ModalTinNhanRieng';
 import ModalTaoCongDong from './ModalTaoCongDong';
@@ -102,12 +98,10 @@ interface ContextMenuState {
 }
 
 export default function ThanhBen({
-  onLogout,
   onSearch,
   adminActive,
   onSelectChannel,
 }: {
-  onLogout: () => void;
   onSearch: () => void;
   adminActive?: boolean;
   onSelectChannel?: (id: string) => void;
@@ -121,7 +115,6 @@ export default function ThanhBen({
   const [filterTab, setFilterTab] = useState<'all' | 'unread'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'direct' | 'class' | 'community'>('all');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [actionMenuChannelId, setActionMenuChannelId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   // Quản lý ghim hội thoại (lưu vào localStorage theo tài khoản)
@@ -155,7 +148,6 @@ export default function ThanhBen({
       return next;
     });
     setContextMenu(null);
-    setActionMenuChannelId(null);
   };
 
   const handleToggleMute = async (channel: Channel, e?: React.MouseEvent) => {
@@ -171,7 +163,6 @@ export default function ThanhBen({
       timeout: 2000,
     });
     setContextMenu(null);
-    setActionMenuChannelId(null);
   };
 
   const handleMarkAsRead = (channel: Channel, e?: React.MouseEvent) => {
@@ -184,7 +175,6 @@ export default function ThanhBen({
       toast.push({ kind: 'info', title: 'Đã đánh dấu là đã đọc', timeout: 1500 });
     }
     setContextMenu(null);
-    setActionMenuChannelId(null);
   };
 
   // Đóng context menu khi click ra ngoài hoặc scroll
@@ -192,12 +182,10 @@ export default function ThanhBen({
     const onWindowClick = (e: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
         setContextMenu(null);
-        setActionMenuChannelId(null);
       }
     };
     const onScroll = () => {
       setContextMenu(null);
-      setActionMenuChannelId(null);
     };
     window.addEventListener('click', onWindowClick);
     window.addEventListener('scroll', onScroll, true);

@@ -17,7 +17,6 @@ export default function DanhSachTinNhan({
   const items = data?.items ?? [];
   const jump = state.jump?.channelId === channel.id ? state.jump : null;
   const jumpHandled = useRef<number | null>(null);
-  const isStaff = me.role !== 'STUDENT';
   // Đang "dính" ở cuối danh sách? -> ảnh tải xong (đổi chiều cao) vẫn giữ ở cuối
   const stick = useRef(true);
 
@@ -130,9 +129,7 @@ export default function DanhSachTinNhan({
               online={!!state.online[m.senderId]}
               channel={channel}
               meId={me.id}
-              isStaff={isStaff}
               mentioned={m.status === 'sent' && !m.deletedAt && mentionsMe(m, me.id)}
-              memberCount={(channel.members || []).length}
               actions={actions}
             />
           </Fragment>

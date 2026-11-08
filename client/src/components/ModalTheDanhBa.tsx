@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { useChat } from '../state/ChatContext';
 import { api } from '../lib/api';
 import { roleLabel } from '../lib/format';
-import { useToast } from '../state/toast';
 import type { ContactCardData, FriendUser, SearchUserResult } from '../types';
 import AnhDaiDien from './AnhDaiDien';
 import Modal from './ui/HopThoai';
@@ -15,7 +14,6 @@ interface ModalTheDanhBaProps {
 
 export default function ModalTheDanhBa({ onClose, onSelect }: ModalTheDanhBaProps) {
   const { me, friends, state } = useChat();
-  const toast = useToast();
   const [filter, setFilter] = useState('');
   const [searching, setSearching] = useState(false);
   const [exactUser, setExactUser] = useState<SearchUserResult | null>(null);
