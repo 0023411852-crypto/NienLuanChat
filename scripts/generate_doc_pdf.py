@@ -309,7 +309,7 @@ def build_html():
   .screenshot-img {{
     max-width: 96%;
     height: auto;
-    max-height: 220px;
+    max-height: 185px;
     border-radius: 4px;
     border: 1px solid #e2e8f0;
     display: block;
@@ -450,7 +450,7 @@ def build_html():
 
     <div class="page-footer">
       <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 1 / 6</span>
+      <span>Trang 1 / 5</span>
     </div>
   </div>
 
@@ -608,7 +608,7 @@ def build_html():
 
     <div class="page-footer">
       <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 2 / 6</span>
+      <span>Trang 2 / 5</span>
     </div>
   </div>
 
@@ -625,8 +625,8 @@ def build_html():
         Cơ sở dữ liệu được xây dựng trên hệ quản trị <strong>PostgreSQL 16</strong> và mô hình hóa thông qua <strong>Prisma ORM</strong>. Lược đồ gồm 7 thực thể liên kết chặt chẽ qua các khóa ngoại, ràng buộc toàn vẹn và cơ chế cascade deletion:
       </p>
 
-      <div class="diagram-container">
-        <svg viewBox="0 0 850 490" width="100%" height="430" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 8pt;">
+      <div class="diagram-container" style="padding: 4px; margin: 4px 0;">
+        <svg viewBox="0 0 850 490" width="100%" height="305" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 8pt;">
           <defs>
             <filter id="erd-card-shadow" x="-5%" y="-5%" width="110%" height="110%">
               <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#0f172a" flood-opacity="0.08"/>
@@ -764,121 +764,70 @@ def build_html():
         </svg>
         <div class="diagram-caption">Hình 2. Sơ đồ thực thể liên kết (ERD) chi tiết cơ sở dữ liệu KhoaChat</div>
       </div>
-    </div>
 
-    <div class="page-footer">
-      <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 3 / 6</span>
-    </div>
-  </div>
-
-  <!-- ==================== TRANG 4: BẢNG ĐẶC TẢ CƠ SỞ DỮ LIỆU ==================== -->
-  <div class="page">
-    <div class="content-wrap">
-      <div class="doc-header">
-        <span class="subject">Báo Cáo Niên Luận Ngành CNTT</span>
-        <span>Mốc 1: Phân Tích và Thiết Kế</span>
-      </div>
-
-      <h2 class="section-title"><span class="badge">3.1</span> Đặc Tả Chi Tiết Các Bảng Trong Cơ Sở Dữ Liệu</h2>
-      <p>
-        Mỗi thực thể trong mô hình được thiết kế chuẩn hóa cấp 3 (3NF), định danh khóa chính bằng UUID hoặc chuỗi ngẫu nhiên có kiểm tra tính duy nhất. Các quan hệ tham chiếu đều có ràng buộc khóa ngoại chặt chẽ:
-      </p>
-
-      <table class="data-table">
+      <table class="data-table" style="margin-top: 4px; font-size: 7.5pt;">
         <thead>
           <tr>
-            <th style="width: 15%;">Tên bảng</th>
-            <th style="width: 28%;">Khóa chính & Khóa ngoại</th>
-            <th style="width: 32%;">Các cột dữ liệu chính</th>
-            <th style="width: 25%;">Ràng buộc toàn vẹn</th>
+            <th style="width: 16%;">Tên thực thể</th>
+            <th style="width: 25%;">Khóa chính (PK) / Duy nhất (UK)</th>
+            <th style="width: 26%;">Khóa ngoại (FK)</th>
+            <th style="width: 33%;">Mục đích & Ràng buộc toàn vẹn</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>User</strong><br><span style="font-size:7.5pt; color:#64748b;">(Người dùng)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-uk">UK</span> email (String)
-            </td>
-            <td>password (hash bcrypt), name, role (STUDENT, LECTURER, ADMIN), avatar, studentCode, locked, lastSeenAt</td>
-            <td>Email duy nhất toàn trường; Role mặc định STUDENT; cascade liên kết khi xóa người dùng.</td>
+            <td><strong>User</strong> (Người dùng)</td>
+            <td><span class="tag tag-pk">PK</span> id (UUID), <span class="tag tag-uk">UK</span> email</td>
+            <td>—</td>
+            <td>Lưu tài khoản, phân quyền STUDENT / LECTURER / ADMIN.</td>
           </tr>
           <tr>
-            <td><strong>Channel</strong><br><span style="font-size:7.5pt; color:#64748b;">(Kênh chat)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)
-            </td>
-            <td>type (CLASS, ANNOUNCEMENT, DIRECT, COMMUNITY), name, description, courseCode, avatar, archived</td>
-            <td>Type phân loại mục đích kênh; cờ <code>archived</code> phục vụ lưu trữ lớp học khi kết thúc học kỳ.</td>
+            <td><strong>Channel</strong> (Kênh chat)</td>
+            <td><span class="tag tag-pk">PK</span> id (UUID)</td>
+            <td>—</td>
+            <td>Phân loại kênh: CLASS, ANNOUNCEMENT, DIRECT, COMMUNITY.</td>
           </tr>
           <tr>
-            <td><strong>ChannelMember</strong><br><span style="font-size:7.5pt; color:#64748b;">(Thành viên kênh)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-fk">FK</span> channelId &rarr; Channel(id)<br>
-              <span class="tag tag-fk">FK</span> userId &rarr; User(id)
-            </td>
-            <td>role (OWNER, MODERATOR, MEMBER), notifyLevel (DEFAULT, ALL, MENTIONS, NONE), lastReadSeq, lastReadAt</td>
-            <td><span class="tag tag-uk">UNIQUE(channelId, userId)</span>; <code>lastReadSeq</code> tự động tăng khi xem tin; ON DELETE CASCADE.</td>
+            <td><strong>ChannelMember</strong> (Thành viên)</td>
+            <td><span class="tag tag-pk">PK</span> id, <span class="tag tag-uk">UK</span> (channelId, userId)</td>
+            <td><span class="tag tag-fk">FK</span> channelId, userId</td>
+            <td>Vai trò (OWNER/MOD/MEMBER); tự tăng lastReadSeq khi xem.</td>
           </tr>
           <tr>
-            <td><strong>Message</strong><br><span style="font-size:7.5pt; color:#64748b;">(Tin nhắn)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-uk">UK</span> clientId (UUID)<br>
-              <span class="tag tag-fk">FK</span> channelId, senderId<br>
-              <span class="tag tag-fk">FK</span> replyToId, pinnedById
-            </td>
-            <td>seq (số thứ tự tự tăng trong kênh), type (TEXT, FILE, IMAGE, SYSTEM), content, pinned, deletedAt</td>
-            <td>Chống trùng lặp tin bằng <code>clientId</code>; index (channelId, seq) hỗ trợ tải bù tin tức thời; tính đã đọc khi lastReadSeq &ge; seq.</td>
+            <td><strong>Message</strong> (Tin nhắn)</td>
+            <td><span class="tag tag-pk">PK</span> id, <span class="tag tag-uk">UK</span> clientId</td>
+            <td><span class="tag tag-fk">FK</span> channelId, senderId, replyToId</td>
+            <td>Số seq tự tăng; chống gửi trùng qua clientId (UUID).</td>
           </tr>
           <tr>
-            <td><strong>Attachment</strong><br><span style="font-size:7.5pt; color:#64748b;">(Tệp đính kèm)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-fk">FK</span> channelId &rarr; Channel(id)<br>
-              <span class="tag tag-fk">FK</span> uploaderId &rarr; User(id)<br>
-              <span class="tag tag-fk">FK</span> messageId &rarr; Message(id)
-            </td>
-            <td>filename, mime, size (Bytes), isImage, path (đường dẫn lưu đĩa bảo mật), url, createdAt</td>
-            <td>Giới hạn tối đa 20MB/tệp; kiểm tra magic bytes; chỉ thành viên trong kênh mới được tải qua API bảo mật.</td>
+            <td><strong>Attachment</strong> (Tệp/Ảnh)</td>
+            <td><span class="tag tag-pk">PK</span> id (UUID)</td>
+            <td><span class="tag tag-fk">FK</span> channelId, uploaderId, messageId</td>
+            <td>Lưu tệp học tập, ảnh; giới hạn 20MB; bảo mật theo thành viên kênh.</td>
           </tr>
           <tr>
-            <td><strong>Mention</strong><br><span style="font-size:7.5pt; color:#64748b;">(Lượt nhắc tên @)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-fk">FK</span> messageId &rarr; Message(id)<br>
-              <span class="tag tag-fk">FK</span> userId &rarr; User(id)
-            </td>
-            <td>messageId, userId</td>
-            <td><span class="tag tag-uk">UNIQUE(messageId, userId)</span>; kích hoạt huy hiệu @ nhắc nhở và thông báo nổi bật.</td>
+            <td><strong>Mention</strong> (@nhắc tên)</td>
+            <td><span class="tag tag-pk">PK</span> id, <span class="tag tag-uk">UK</span> (messageId, userId)</td>
+            <td><span class="tag tag-fk">FK</span> messageId, userId</td>
+            <td>Liên kết nhắc tên thành viên @mention hoặc toàn kênh @all.</td>
           </tr>
           <tr>
-            <td><strong>PushSubscription</strong><br><span style="font-size:7.5pt; color:#64748b;">(Đăng ký Push)</span></td>
-            <td>
-              <span class="tag tag-pk">PK</span> id (UUID)<br>
-              <span class="tag tag-fk">FK</span> userId &rarr; User(id)<br>
-              <span class="tag tag-uk">UK</span> endpoint (String)
-            </td>
-            <td>endpoint, p256dh, auth, createdAt</td>
-            <td>Hỗ trợ Web Push chuẩn RFC 8291 (VAPID); tự động gửi thông báo khi người dùng tắt trình duyệt.</td>
+            <td><strong>PushSubscription</strong> (Web Push)</td>
+            <td><span class="tag tag-pk">PK</span> id, <span class="tag tag-uk">UK</span> endpoint</td>
+            <td><span class="tag tag-fk">FK</span> userId</td>
+            <td>Đăng ký thông báo Web Push chuẩn RFC 8291 (VAPID).</td>
           </tr>
         </tbody>
       </table>
-
-      <div class="info-callout">
-        <strong>Cơ chế tự động đồng bộ đã đọc & Tìm kiếm tối ưu:</strong> Hệ thống tự động ghi nhận trạng thái đã đọc khi thành viên mở xem kênh (cập nhật <code>ChannelMember.lastReadSeq</code> tiến lên mức mới nhất, không cần thao tác bấm thủ công). Giảng viên có thể xem thống kê danh sách thành viên đã đọc hoặc chưa đọc thông báo lớp (xác định qua điều kiện <code>lastReadSeq &ge; msg.seq</code>). Cột <code>content</code> được lập chỉ mục <code>tsvector</code> + <code>unaccent</code> cho phép tìm kiếm tiếng Việt không dấu dưới 5ms.
-      </div>
     </div>
 
     <div class="page-footer">
       <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 4 / 6</span>
+      <span>Trang 3 / 5</span>
     </div>
   </div>
 
-  <!-- ==================== TRANG 5: CÔNG NGHỆ & PHÂN CÔNG ==================== -->
+  <!-- ==================== TRANG 4: CÔNG NGHỆ & PHÂN CÔNG ==================== -->
   <div class="page">
     <div class="content-wrap">
       <div class="doc-header">
@@ -934,7 +883,7 @@ def build_html():
         </tbody>
       </table>
 
-      <h2 class="section-title" style="margin-top: 12px;"><span class="badge">5</span> Bảng Phân Công Công Việc Giữa 2 Bạn (Gắn Mã Chức Năng)</h2>
+      <h2 class="section-title" style="margin-top: 10px;"><span class="badge">5</span> Bảng Phân Công Công Việc Giữa 2 Bạn (Gắn Mã Chức Năng)</h2>
       <p>
         Đề tài do nhóm 2 sinh viên cùng hợp tác thực hiện. Phân công công việc được định rõ ràng, gắn trực tiếp từng mã chức năng cụ thể (CN01 – CN20) tương ứng với chuyên môn của từng bạn:
       </p>
@@ -991,11 +940,11 @@ def build_html():
 
     <div class="page-footer">
       <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 5 / 6</span>
+      <span>Trang 4 / 5</span>
     </div>
   </div>
 
-  <!-- ==================== TRANG 6: ẢNH CHỤP MÀN HÌNH & KẾT QUẢ ==================== -->
+  <!-- ==================== TRANG 5: ẢNH CHỤP MÀN HÌNH & MINH CHỨNG ==================== -->
   <div class="page">
     <div class="content-wrap">
       <div class="doc-header">
@@ -1044,7 +993,7 @@ def build_html():
 
     <div class="page-footer">
       <span>KhoaChat – Mốc 1: Phân tích & Thiết kế</span>
-      <span>Trang 6 / 6</span>
+      <span>Trang 5 / 5</span>
     </div>
   </div>
 
