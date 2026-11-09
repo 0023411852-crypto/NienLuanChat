@@ -44,11 +44,14 @@ def build_html():
   .page {{
     page-break-after: always;
     page-break-inside: avoid;
-    height: 100%;
+    height: 269mm;
+    min-height: 269mm;
+    max-height: 269mm;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     box-sizing: border-box;
+    position: relative;
   }}
   .page:last-child {{
     page-break-after: avoid;
@@ -79,11 +82,11 @@ def build_html():
 
   .page-footer {{
     flex-shrink: 0;
-    margin-top: 10px;
-    padding-top: 5px;
-    border-top: 1px solid #e2e8f0;
-    font-size: 7.8pt;
-    color: #94a3b8;
+    margin-top: auto;
+    padding-top: 6px;
+    border-top: 1px solid #cbd5e1;
+    font-size: 8pt;
+    color: #64748b;
     display: flex;
     justify-content: space-between;
     align-items: center;
