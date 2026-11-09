@@ -788,6 +788,18 @@ def build_html():
         Mỗi thực thể trong mô hình được thiết kế chuẩn hóa cấp 3 (3NF), định danh khóa chính bằng UUID hoặc chuỗi ngẫu nhiên có kiểm tra tính duy nhất. Các quan hệ tham chiếu đều có ràng buộc khóa ngoại chặt chẽ:
       </p>
 
+      <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #1e40af; border-radius: 6px; padding: 6px 10px; margin: 6px 0 8px 0; font-size: 7.8pt;">
+        <div style="font-weight: 700; color: #1e40af; margin-bottom: 4px; font-size: 8pt;">
+          📌 Chú giải các ký hiệu & Thuật ngữ quy ước trong thiết kế CSDL:
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; line-height: 1.35;">
+          <div><span class="tag tag-pk">PK</span> <strong>Primary Key (Khóa chính):</strong> Thuộc tính định danh duy nhất cho từng bản ghi trong bảng.</div>
+          <div><span class="tag tag-fk">FK</span> <strong>Foreign Key (Khóa ngoại):</strong> Thuộc tính liên kết tham chiếu tới khóa chính (PK) của bảng khác.</div>
+          <div><span class="tag tag-uk">UK</span> <strong>Unique Key (Khóa duy nhất):</strong> Ràng buộc dữ liệu không được phép trùng lặp trên toàn bộ bảng.</div>
+          <div><strong style="color:#0f172a; font-family: monospace; background:#e2e8f0; padding:1px 4px; border-radius:3px;">UUID</strong> <strong>Universally Unique Identifier:</strong> Chuỗi định danh 128-bit (chuẩn RFC 4122) bảo mật, chống đoán ID và không trùng lặp.</div>
+        </div>
+      </div>
+
       <table class="data-table">
         <thead>
           <tr>
